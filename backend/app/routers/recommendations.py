@@ -1,3 +1,5 @@
+# backend/app/routers/recommendations.py
+
 from fastapi import APIRouter, HTTPException, Depends, Query
 import motor.motor_asyncio
 from decouple import config
@@ -188,79 +190,118 @@ async def get_machine_locations(
     """Get machine locations for map display"""
     try:
         if current_user["role"] == "admin":
-            # Admin sees all their dealership's machines
+            # Admin sees all their dealership's machines - use the same field name as in admin dashboard
             machines = await db.machines.find({
-                "dealerID": current_user["dealershipID"]
+                "dealerID": current_user["dealershipID"]  # This matches the admin dashboard query
             }).to_list(length=None)
         else:
             # Customer sees only their rented machines
             machines = await db.machines.find({
-                "userID": current_user["userID"]
+                "userID": current_user["userID"]  # This should match the actual field name in DB
             }).to_list(length=None)
+        
+        print(f"Found {len(machines)} machines for user {current_user['userID']} with role {current_user['role']}")
         
         locations = []
         
         for machine in machines:
-            latitude = None
-            longitude = None
-            address = "Unknown Location"
-            
-            if machine.get("location"):
-                location_parts = machine["location"].split(",")
+            try:
+                # Debug: Print machine structure
+                print(f"Processing machine: {machine.get('machineID', 'No ID')} - Keys: {list(machine.keys())}")
                 
-                if len(location_parts) >= 2:
-                    try:
-                        # Try to parse coordinates from the last two parts
-                        longitude = float(location_parts[-1].strip())
-                        latitude = float(location_parts[-2].strip())
-                        
-                        # If there are more than 2 parts, the first parts are the address
-                        if len(location_parts) > 2:
-                            address = ",".join(location_parts[:-2]).strip()
-                        else:
-                            address = machine.get("siteID", "Machine Location")
+                # Parse latitude and longitude from the location field
+                latitude = None
+                longitude = None
+                address = "Unknown Location"
+                
+                if machine.get("location"):
+                    location_parts = machine["location"].split(",")
+                    
+                    if len(location_parts) >= 2:
+                        try:
+                            # Try to parse coordinates from the last two parts
+                            longitude = float(location_parts[-1].strip())
+                            latitude = float(location_parts[-2].strip())
                             
-                    except (ValueError, IndexError):
+                            # If there are more than 2 parts, the first parts are the address
+                            if len(location_parts) > 2:
+                                address = ",".join(location_parts[:-2]).strip()
+                            else:
+                                address = machine.get("siteID", "Machine Location")
+                                
+                        except (ValueError, IndexError):
+                            # If parsing fails, use default coordinates (Bangalore center)
+                            latitude = 12.9716
+                            longitude = 77.5946
+                            address = machine.get("location", "Unknown Location")
+                    else:
+                        # If no coordinates, use default location
                         latitude = 12.9716
-                        longitude = 77.5946
+                        longitude = 77.5946  
                         address = machine.get("location", "Unknown Location")
                 else:
+                    # Default coordinates if no location data
                     latitude = 12.9716
-                    longitude = 77.5946  
-                    address = machine.get("location", "Unknown Location")
-            else:
-                latitude = 12.9716
-                longitude = 77.5946
-                address = machine.get("siteID", "Unknown Location")
-            
-            # Get user information if machine is assigned
-            user_info = None
-            if machine.get("userID"):
-                user = await db.users.find_one({"userID": machine["userID"]})
-                user_info = {
-                    "userID": machine["userID"],
-                    "userName": user["name"] if user else "Unknown User",
-                    "userEmail": user["email"] if user else None
+                    longitude = 77.5946
+                    address = machine.get("siteID", "Unknown Location")
+                
+                # Get user information if machine is assigned
+                user_info = None
+                machine_user_id = machine.get("userID")  # Try camelCase first
+                if not machine_user_id:
+                    machine_user_id = machine.get("user_id")  # Try snake_case as fallback
+                
+                if machine_user_id:
+                    try:
+                        user = await db.users.find_one({"userID": machine_user_id})
+                        if user:
+                            user_info = {
+                                "userID": machine_user_id,
+                                "userName": user.get("name", "Unknown User"),
+                                "userEmail": user.get("email", None)
+                            }
+                        else:
+                            # User not found, but machine has userID
+                            user_info = {
+                                "userID": machine_user_id,
+                                "userName": "Unknown User",
+                                "userEmail": None
+                            }
+                    except Exception as user_error:
+                        print(f"Error fetching user data for {machine_user_id}: {user_error}")
+                        user_info = {
+                            "userID": machine_user_id,
+                            "userName": "Unknown User", 
+                            "userEmail": None
+                        }
+                
+                location = {
+                    "machineID": machine.get("machineID", "Unknown"),
+                    "machineType": machine.get("machineType", "Unknown"),
+                    "status": machine.get("status", "Unknown"),
+                    "latitude": latitude,
+                    "longitude": longitude,
+                    "address": address,
+                    "siteID": machine.get("siteID"),
+                    "userInfo": user_info,
+                    "dealerID": machine.get("dealerID"),
+                    "engineHoursPerDay": machine.get("engineHoursPerDay", 0),
+                    "idleHours": machine.get("idleHours", 0),
+                    "operatingDays": machine.get("operatingDays", 0),
+                    "checkOutDate": machine.get("checkOutDate"),
+                    "checkInDate": machine.get("checkInDate"),
+                    "lastUpdated": machine.get("updatedAt", machine.get("createdAt"))
                 }
-            
-            location = {
-                "machineID": machine["machineID"],
-                "machineType": machine["machineType"],
-                "status": machine["status"],
-                "latitude": latitude,
-                "longitude": longitude,
-                "address": address,
-                "siteID": machine.get("siteID"),
-                "userInfo": user_info,
-                "dealerID": machine["dealerID"],
-                "engineHoursPerDay": machine.get("engineHoursPerDay", 0),
-                "idleHours": machine.get("idleHours", 0),
-                "operatingDays": machine.get("operatingDays", 0),
-                "checkOutDate": machine.get("checkOutDate"),
-                "checkInDate": machine.get("checkInDate"),
-                "lastUpdated": machine["updatedAt"]
-            }
-            locations.append(location)
+                locations.append(location)
+                
+            except Exception as machine_error:
+                print(f"Error processing machine {machine.get('machineID', 'Unknown')}: {machine_error}")
+                import traceback
+                traceback.print_exc()
+                # Continue with next machine instead of failing completely
+                continue
+        
+        print(f"Successfully processed {len(locations)} machine locations")
         
         return APIResponse(
             success=True,
@@ -269,6 +310,9 @@ async def get_machine_locations(
         )
         
     except Exception as e:
+        print(f"Full error in get_machine_locations: {str(e)}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
 # Helper function to create transfer recommendations
