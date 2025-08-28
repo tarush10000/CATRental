@@ -196,3 +196,89 @@ class Recommendation(BaseModel):
     description: str
     priority: str
     suggested_action: str
+
+class TransferStatus(str, Enum):
+    PENDING = "pending"
+    APPROVED = "approved" 
+    DECLINED = "declined"
+
+class RecommendationType(str, Enum):
+    TRANSFER_OPTIMIZATION = "transfer_optimization"
+    MAINTENANCE = "maintenance"
+    EFFICIENCY = "efficiency"
+    COST_SAVING = "cost_saving"
+    USAGE_PATTERN = "usage_pattern"
+
+class RecommendationSeverity(str, Enum):
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+    CRITICAL = "critical"
+
+# Transfer Models
+class TransferBase(BaseModel):
+    user_id_1: str  # Current user
+    user_id_2: str  # Requesting user
+    dealer_id: str
+    location_1: str  # Current location
+    location_2: str  # Requested location
+    machine_id: str
+    estimated_savings: Optional[float] = None
+    recommendation_reason: Optional[str] = None
+
+class TransferCreate(TransferBase):
+    pass
+
+class TransferUpdate(BaseModel):
+    status: TransferStatus
+    admin_comments: Optional[str] = None
+
+class Transfer(TransferBase):
+    transfer_id: str
+    status: TransferStatus = TransferStatus.PENDING
+    admin_comments: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+# Recommendation Models  
+class RecommendationBase(BaseModel):
+    user_id: str
+    recommendation: str
+    recommendation_type: RecommendationType
+    severity: RecommendationSeverity
+    target_user_type: UserRole  # admin or customer
+    
+class RecommendationCreate(RecommendationBase):
+    pass
+
+class RecommendationModel(RecommendationBase):
+    recommendation_id: str
+    date_time: datetime
+    is_read: bool = False
+    is_dismissed: bool = False
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+# Enhanced Machine Location Model (using existing machine data)
+class MachineLocation(BaseModel):
+    machine_id: str
+    machine_type: str
+    status: str
+    latitude: float
+    longitude: float
+    address: str
+    site_id: Optional[str] = None
+    user_info: Optional[dict] = None  # Contains userID, userName, userEmail if assigned
+    dealer_id: str
+    engine_hours_per_day: Optional[float] = 0
+    idle_hours: Optional[float] = 0
+    operating_days: Optional[int] = 0
+    check_out_date: Optional[datetime] = None
+    check_in_date: Optional[datetime] = None
+    last_updated: datetime
