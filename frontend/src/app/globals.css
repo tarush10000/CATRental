@@ -2429,36 +2429,6 @@ a {
     gap: 1rem;
 }
 
-.navbar-search {
-    position: relative;
-    min-width: 300px;
-}
-
-.search-icon {
-    position: absolute;
-    left: 0.875rem;
-    top: 50%;
-    transform: translateY(-50%);
-    color: var(--cat-medium-gray);
-}
-
-.search-input {
-    width: 100%;
-    padding: 0.625rem 1rem 0.625rem 2.5rem;
-    border: 1px solid #e2e8f0;
-    border-radius: 10px;
-    font-size: 0.9rem;
-    background: #f8fafc;
-    transition: all 0.2s ease;
-}
-
-.search-input:focus {
-    outline: none;
-    border-color: var(--cat-yellow);
-    background: white;
-    box-shadow: 0 0 0 3px rgba(255, 205, 17, 0.1);
-}
-
 .notification-btn {
     position: relative;
     background: none;
@@ -2473,6 +2443,7 @@ a {
 .notification-btn:hover {
     background: #f1f5f9;
     color: var(--cat-dark-gray);
+    transform: translateY(-1px);
 }
 
 .notification-badge {
@@ -2490,6 +2461,60 @@ a {
     align-items: center;
     justify-content: center;
     line-height: 1;
+}
+
+.user-name-navbar {
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: var(--cat-dark-gray);
+}
+
+.user-menu-dropdown {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+    min-width: 200px;
+    z-index: 50;
+    padding: 0.5rem 0;
+}
+
+.dropdown-item {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    color: var(--cat-dark-gray);
+    font-size: 0.9rem;
+}
+
+.dropdown-button {
+    width: 100%;
+    border: none;
+    background: none;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-align: left;
+}
+
+.dropdown-button:hover {
+    background: #f8fafc;
+    color: var(--cat-yellow);
+}
+
+.dropdown-divider {
+    height: 1px;
+    background: #e2e8f0;
+    margin: 0.5rem 0;
+}
+
+.user-role-text {
+    font-size: 0.8rem;
+    color: var(--cat-medium-gray);
+    text-transform: capitalize;
 }
 
 .user-menu {
