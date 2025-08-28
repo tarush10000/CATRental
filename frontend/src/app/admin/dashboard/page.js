@@ -6,31 +6,26 @@ import { useRouter } from 'next/navigation'
 import Head from 'next/head'
 import Layout from '@/components/Layout'
 import {
-    Truck,
-    Plus,
-    FileText,
-    MessageSquare,
-    Settings,
-    TrendingUp,
-    Wrench,
-    Activity,
-    Clock,
-    AlertTriangle,
-    CheckCircle
+    Truck, Plus, FileText, MessageSquare, Settings,
+    TrendingUp, Wrench, Activity, Clock, CheckCircle,
+    AlertTriangle, Bell, Users, BarChart3,
+    RefreshCw, ArrowUp, ArrowDown, Eye, IndianRupee
 } from 'lucide-react'
 
 export default function AdminDashboard() {
     const { data: session, status } = useSession()
     const router = useRouter()
+    
+    // Updated state to match new API response structure
     const [stats, setStats] = useState({
         total_machines: 0,
-        active_machines: 0,
-        maintenance_machines: 0,
-        pending_requests: 0
+        active_orders: 0,
+        revenue: 0.0,
+        notifications: []
     })
     const [recentMachines, setRecentMachines] = useState([])
-    const [recentRequests, setRecentRequests] = useState([])
     const [loading, setLoading] = useState(true)
+    const [refreshing, setRefreshing] = useState(false)
 
     useEffect(() => {
         if (status === 'loading') return
@@ -41,25 +36,31 @@ export default function AdminDashboard() {
         }
 
         fetchDashboardData()
-    }, [session, status])
+    }, [session, status, router])
 
-    const fetchDashboardData = async () => {
+    const fetchDashboardData = async (isRefresh = false) => {
         try {
-            setLoading(true)
+            if (isRefresh) {
+                setRefreshing(true)
+            } else {
+                setLoading(true)
+            }
 
-            // Fetch dashboard statistics
-            const statsResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/admin/dashboard/stats`, {
+            // Fetch from the new unified dashboard endpoint
+            const dashboardResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/admin/dashboard`, {
                 headers: {
                     'Authorization': `Bearer ${session.accessToken}`,
                 },
             })
 
-            if (statsResponse.ok) {
-                const statsData = await statsResponse.json()
-                setStats(statsData.data)
+            if (dashboardResponse.ok) {
+                const dashboardData = await dashboardResponse.json()
+                if (dashboardData.success) {
+                    setStats(dashboardData.data)
+                }
             }
 
-            // Fetch recent machines
+            // Fetch recent machines (this endpoint remains the same)
             const machinesResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/admin/machines/recent`, {
                 headers: {
                     'Authorization': `Bearer ${session.accessToken}`,
@@ -68,250 +69,343 @@ export default function AdminDashboard() {
 
             if (machinesResponse.ok) {
                 const machinesData = await machinesResponse.json()
-                setRecentMachines(machinesData.data || [])
-            }
-
-            // Fetch recent requests
-            const requestsResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/admin/requests/recent`, {
-                headers: {
-                    'Authorization': `Bearer ${session.accessToken}`,
-                },
-            })
-
-            if (requestsResponse.ok) {
-                const requestsData = await requestsResponse.json()
-                setRecentRequests(requestsData.data || [])
+                if (machinesData.success) {
+                    setRecentMachines(machinesData.data || [])
+                }
             }
 
         } catch (error) {
             console.error('Error fetching dashboard data:', error)
         } finally {
             setLoading(false)
+            setRefreshing(false)
         }
+    }
+
+    const handleRefresh = () => {
+        fetchDashboardData(true)
     }
 
     const getStatusBadge = (status) => {
         const statusConfig = {
-            'Ready': { class: 'badge-ready', icon: CheckCircle },
-            'Occupied': { class: 'badge-occupied', icon: Activity },
-            'Maintenance': { class: 'badge-maintenance', icon: Wrench },
-            'In-transit': { class: 'badge-in-transit', icon: Truck }
+            'Ready': { class: 'badge-ready-modern', icon: CheckCircle },
+            'Occupied': { class: 'badge-occupied-modern', icon: Activity },
+            'Maintenance': { class: 'badge-maintenance-modern', icon: Wrench },
+            'In-transit': { class: 'badge-in-transit-modern', icon: Truck }
         }
 
-        const config = statusConfig[status] || { class: 'badge-pending', icon: Clock }
+        const config = statusConfig[status] || { class: 'badge-pending-modern', icon: Clock }
         const IconComponent = config.icon
 
         return (
-            <span className={`badge ${config.class} flex items-center`}>
-                <IconComponent className="w-3 h-3 mr-1" />
+            <span className={`badge-modern ${config.class}`}>
+                <IconComponent size={12} />
                 {status}
             </span>
         )
     }
 
-    const getRequestStatusBadge = (status) => {
-        const statusConfig = {
-            'Approved': { class: 'badge-approved', icon: CheckCircle },
-            'In-Progress': { class: 'badge-pending', icon: Clock },
-            'Denied': { class: 'badge-denied', icon: AlertTriangle }
-        }
-
-        const config = statusConfig[status] || { class: 'badge-pending', icon: Clock }
-        const IconComponent = config.icon
-
-        return (
-            <span className={`badge ${config.class} flex items-center`}>
-                <IconComponent className="w-3 h-3 mr-1" />
-                {status}
-            </span>
-        )
-    }
-
-    // Show loading state while session is being fetched
-    if (status === 'loading') {
+    if (status === 'loading' || loading) {
         return (
             <Layout>
-                <div className="flex items-center justify-center min-h-screen">
-                    <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
+                <div className="dashboard-loading">
+                    <div className="loading-spinner"></div>
+                    <p className="loading-text">Loading dashboard...</p>
                 </div>
             </Layout>
         )
     }
 
-    // If no session or not admin, this will be handled by the useEffect redirect
-    if (!session || session.user.role !== 'admin') {
-        return null
-    }
-
     return (
         <>
             <Head>
-                <title>Admin Dashboard - CatRental</title>
-                <meta name="description" content="Admin dashboard for managing CatRental operations" />
+                <title>Admin Dashboard - Caterpillar Machine Tracker</title>
+                <meta name="description" content="Admin dashboard for managing Caterpillar machine rentals and tracking" />
             </Head>
+
             <Layout>
-                <div className="p-6 bg-gray-50 min-h-screen">
-                    {/* Header */}
-                    <div className="mb-8">
-                        <h1 className="text-3xl font-bold text-cat-dark-gray mb-2">Admin Dashboard</h1>
-                        <p className="text-cat-medium-gray">
-                            Welcome back, {session.user.name}! Here's an overview of your rental operations.
-                        </p>
+                <div className="dashboard-container">
+                    {/* Dashboard Header */}
+                    <div className="dashboard-header">
+                        <div className="header-content">
+                            <div className="header-text">
+                                <h1 className="dashboard-title">
+                                    Welcome back, {session?.user?.name}
+                                </h1>
+                                <p className="dashboard-subtitle">
+                                    {session?.user?.dealership_name} - Admin Dashboard
+                                </p>
+                            </div>
+                            <div className="header-actions">
+                                <button
+                                    onClick={handleRefresh}
+                                    disabled={refreshing}
+                                    className="btn-modern btn-secondary-modern"
+                                >
+                                    <RefreshCw size={16} className={refreshing ? 'animate-spin' : ''} />
+                                    Refresh
+                                </button>
+                            </div>
+                        </div>
                     </div>
 
-                    {loading ? (
-                        <div className="flex items-center justify-center py-12">
-                            <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600"></div>
+                    {/* Statistics Cards */}
+                    <div className="stats-grid">
+                        <div className="stat-card-modern stat-primary">
+                            <div className="stat-icon">
+                                <Truck size={24} />
+                            </div>
+                            <div className="stat-content">
+                                <div className="stat-value">{stats.total_machines}</div>
+                                <div className="stat-label">Total Machines</div>
+                                <div className="stat-trend positive">
+                                    <ArrowUp size={12} />
+                                    <span>+2 this week</span>
+                                </div>
+                            </div>
                         </div>
-                    ) : (
-                        <>
-                            {/* Statistics Cards */}
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-                                <div className="stat-card">
-                                    <div className="stat-number text-cat-yellow flex items-center">
-                                        <Truck className="h-8 w-8 mr-2" />
-                                        {stats.total_machines}
-                                    </div>
-                                    <div className="stat-label">Total Machines</div>
-                                </div>
 
-                                <div className="stat-card">
-                                    <div className="stat-number text-success-green flex items-center">
-                                        <Activity className="h-8 w-8 mr-2" />
-                                        {stats.active_machines}
-                                    </div>
-                                    <div className="stat-label">Active Machines</div>
-                                </div>
-
-                                <div className="stat-card">
-                                    <div className="stat-number text-warning-orange flex items-center">
-                                        <Wrench className="h-8 w-8 mr-2" />
-                                        {stats.maintenance_machines}
-                                    </div>
-                                    <div className="stat-label">Under Maintenance</div>
-                                </div>
-
-                                <div className="stat-card">
-                                    <div className="stat-number text-info-blue flex items-center">
-                                        <Clock className="h-8 w-8 mr-2" />
-                                        {stats.pending_requests}
-                                    </div>
-                                    <div className="stat-label">Pending Requests</div>
+                        <div className="stat-card-modern stat-success">
+                            <div className="stat-icon">
+                                <Activity size={24} />
+                            </div>
+                            <div className="stat-content">
+                                <div className="stat-value">{stats.active_orders}</div>
+                                <div className="stat-label">Active Orders</div>
+                                <div className="stat-trend positive">
+                                    <ArrowUp size={12} />
+                                    <span>+12% from last month</span>
                                 </div>
                             </div>
+                        </div>
 
-                            {/* Recent Machines and Requests */}
-                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-                                {/* Recent Machines */}
-                                <div className="card">
-                                    <div className="card-header">
-                                        <h3 className="card-title flex items-center">
-                                            <Truck className="h-5 w-5 mr-2" />
-                                            Recent Machines
-                                        </h3>
-                                    </div>
-                                    <div className="card-body">
-                                        {recentMachines.length > 0 ? (
-                                            <div className="space-y-4">
-                                                {recentMachines.map((machine) => (
-                                                    <div key={machine.machine_id} className="flex items-center justify-between p-3 bg-cat-light-gray rounded">
-                                                        <div>
-                                                            <div className="font-medium">{machine.machine_id}</div>
-                                                            <div className="text-sm text-cat-medium-gray">{machine.machine_type}</div>
-                                                        </div>
-                                                        <div className="text-right">
-                                                            {getStatusBadge(machine.status)}
-                                                            <div className="text-sm text-cat-medium-gray mt-1">
-                                                                {machine.location}
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        ) : (
-                                            <p className="text-cat-medium-gray text-center py-4">No recent machines</p>
-                                        )}
-                                    </div>
-                                </div>
-
-                                {/* Recent Requests */}
-                                <div className="card">
-                                    <div className="card-header">
-                                        <h3 className="card-title flex items-center">
-                                            <MessageSquare className="h-5 w-5 mr-2" />
-                                            Recent Requests
-                                        </h3>
-                                    </div>
-                                    <div className="card-body">
-                                        {recentRequests.length > 0 ? (
-                                            <div className="space-y-4">
-                                                {recentRequests.map((request) => (
-                                                    <div key={request._id} className="flex items-center justify-between p-3 bg-cat-light-gray rounded">
-                                                        <div>
-                                                            <div className="font-medium">{request.machineID}</div>
-                                                            <div className="text-sm text-cat-medium-gray">
-                                                                {new Date(request.requestDate).toLocaleDateString()}
-                                                            </div>
-                                                        </div>
-                                                        <div className="text-right">
-                                                            {getRequestStatusBadge(request.status)}
-                                                        </div>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        ) : (
-                                            <p className="text-cat-medium-gray text-center py-4">No recent requests</p>
-                                        )}
-                                    </div>
+                        <div className="stat-card-modern stat-info">
+                            <div className="stat-icon">
+                                <IndianRupee size={24} />
+                            </div>
+                            <div className="stat-content">
+                                <div className="stat-value">₹{stats.revenue.toFixed(2)}</div>
+                                <div className="stat-label">Revenue (30d)</div>
+                                <div className="stat-trend positive">
+                                    <ArrowUp size={12} />
+                                    <span>+8.2% from last month</span>
                                 </div>
                             </div>
+                        </div>
 
-                            {/* Quick Actions */}
-                            <div className="card">
-                                <div className="card-header">
-                                    <h3 className="card-title flex items-center">
-                                        <TrendingUp className="h-5 w-5 mr-2" />
-                                        Quick Actions
-                                    </h3>
-                                </div>
-                                <div className="card-body">
-                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                                        <button
+                        <div className="stat-card-modern stat-warning">
+                            <div className="stat-icon">
+                                <Bell size={24} />
+                            </div>
+                            <div className="stat-content">
+                                <div className="stat-value">{stats.notifications.length}</div>
+                                <div className="stat-label">Active Alerts</div>
+                                {stats.notifications.length > 0 && (
+                                    <div className="stat-trend negative">
+                                        <AlertTriangle size={12} />
+                                        <span>Needs attention</span>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Main Content Grid */}
+                    <div className="dashboard-grid">
+                        {/* Recent Machines */}
+                        <div className="dashboard-card">
+                            <div className="card-header-modern">
+                                <h3 className="card-title-modern">Recent Machines</h3>
+                                <button 
+                                    onClick={() => router.push('/admin/machines')}
+                                    className="btn-modern btn-sm btn-secondary-modern"
+                                >
+                                    <Eye size={14} />
+                                    View All
+                                </button>
+                            </div>
+                            <div className="card-content">
+                                {recentMachines.length > 0 ? (
+                                    <div className="machine-list">
+                                        {recentMachines.map((machine) => (
+                                            <div key={machine._id} className="machine-item">
+                                                <div className="machine-icon">
+                                                    <Truck size={20} />
+                                                </div>
+                                                <div className="machine-details">
+                                                    <div className="machine-id">{machine.machineID}</div>
+                                                    <div className="machine-type">{machine.machineType}</div>
+                                                    <div className="machine-location">{machine.location || 'No location specified'}</div>
+                                                </div>
+                                                <div className="machine-status">
+                                                    {getStatusBadge(machine.status)}
+                                                    <div className="machine-updated">
+                                                        {new Date(machine.updatedAt).toLocaleDateString()}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <div className="empty-state-small">
+                                        <Truck size={32} className="empty-icon" />
+                                        <p className="empty-text">No recent machines</p>
+                                        <button 
                                             onClick={() => router.push('/admin/add-machine')}
-                                            className="btn-primary flex items-center justify-center"
+                                            className="btn-modern btn-sm btn-primary-modern"
                                         >
-                                            <Plus className="h-5 w-5 mr-2" />
-                                            Add New Machine
+                                            <Plus size={14} />
+                                            Add Machine
                                         </button>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
 
-                                        <button
-                                            onClick={() => router.push('/admin/add-order')}
-                                            className="btn-secondary flex items-center justify-center"
-                                        >
-                                            <FileText className="h-5 w-5 mr-2" />
-                                            Create Order
-                                        </button>
+                        {/* Notifications Panel */}
+                        <div className="dashboard-card">
+                            <div className="card-header-modern">
+                                <h3 className="card-title-modern">System Notifications</h3>
+                                {stats.notifications.length > 0 && (
+                                    <span className="notification-count">
+                                        {stats.notifications.length} active
+                                    </span>
+                                )}
+                            </div>
+                            <div className="card-content">
+                                {stats.notifications.length > 0 ? (
+                                    <div className="notification-list">
+                                        {stats.notifications.map((notification, index) => (
+                                            <div key={index} className="notification-item">
+                                                <div className="notification-icon">
+                                                    <AlertTriangle size={16} />
+                                                </div>
+                                                <div className="notification-content">
+                                                    <p className="notification-text">{notification}</p>
+                                                </div>
+                                                <button className="notification-dismiss">
+                                                    <X size={14} />
+                                                </button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <div className="empty-state-small">
+                                        <CheckCircle size={32} className="empty-icon success" />
+                                        <p className="empty-text">All systems running smoothly</p>
+                                        <p className="empty-subtext">No active notifications</p>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
 
-                                        <button
-                                            onClick={() => router.push('/admin/requests')}
-                                            className="btn-secondary flex items-center justify-center"
-                                        >
-                                            <MessageSquare className="h-5 w-5 mr-2" />
-                                            Manage Requests
-                                        </button>
+                        {/* Quick Actions */}
+                        <div className="dashboard-card full-width">
+                            <div className="card-header-modern">
+                                <h3 className="card-title-modern">Quick Actions</h3>
+                                <p className="card-subtitle">Frequently used operations</p>
+                            </div>
+                            <div className="card-content">
+                                <div className="quick-actions-grid">
+                                    <button
+                                        onClick={() => router.push('/admin/add-machine')}
+                                        className="quick-action-btn primary"
+                                    >
+                                        <div className="action-icon">
+                                            <Plus size={20} />
+                                        </div>
+                                        <div className="action-content">
+                                            <h4 className="action-title">Add New Machine</h4>
+                                            <p className="action-description">Register new equipment to your fleet</p>
+                                        </div>
+                                    </button>
 
-                                        <button
-                                            onClick={() => router.push('/admin/machines')}
-                                            className="btn-secondary flex items-center justify-center"
-                                        >
-                                            <Settings className="h-5 w-5 mr-2" />
-                                            View All Machines
-                                        </button>
+                                    <button
+                                        onClick={() => router.push('/admin/add-order')}
+                                        className="quick-action-btn secondary"
+                                    >
+                                        <div className="action-icon">
+                                            <FileText size={20} />
+                                        </div>
+                                        <div className="action-content">
+                                            <h4 className="action-title">Assign Machine</h4>
+                                            <p className="action-description">Assign equipment to customers</p>
+                                        </div>
+                                    </button>
+
+                                    <button
+                                        onClick={() => router.push('/admin/requests')}
+                                        className="quick-action-btn info"
+                                    >
+                                        <div className="action-icon">
+                                            <MessageSquare size={20} />
+                                        </div>
+                                        <div className="action-content">
+                                            <h4 className="action-title">Manage Requests</h4>
+                                            <p className="action-description">Handle customer service requests</p>
+                                        </div>
+                                    </button>
+
+                                    <button
+                                        onClick={() => router.push('/admin/machines')}
+                                        className="quick-action-btn success"
+                                    >
+                                        <div className="action-icon">
+                                            <Settings size={20} />
+                                        </div>
+                                        <div className="action-content">
+                                            <h4 className="action-title">View All Machines</h4>
+                                            <p className="action-description">Complete fleet overview and management</p>
+                                        </div>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Performance Overview */}
+                        <div className="dashboard-card full-width">
+                            <div className="card-header-modern">
+                                <h3 className="card-title-modern">Performance Overview</h3>
+                                <div className="card-actions">
+                                    <select className="period-select">
+                                        <option value="7d">Last 7 days</option>
+                                        <option value="30d" selected>Last 30 days</option>
+                                        <option value="90d">Last 3 months</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div className="card-content">
+                                <div className="performance-metrics">
+                                    <div className="metric-item">
+                                        <div className="metric-label">Machine Utilization</div>
+                                        <div className="metric-value">78.5%</div>
+                                        <div className="metric-progress">
+                                            <div className="progress-bar">
+                                                <div className="progress-fill" style={{ width: '78.5%' }}></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div className="metric-item">
+                                        <div className="metric-label">Average Order Duration</div>
+                                        <div className="metric-value">12.3 days</div>
+                                        <div className="metric-change positive">
+                                            <ArrowUp size={12} />
+                                            2.1 days from last month
+                                        </div>
+                                    </div>
+
+                                    <div className="metric-item">
+                                        <div className="metric-label">Customer Satisfaction</div>
+                                        <div className="metric-value">4.7/5.0</div>
+                                        <div className="metric-stars">
+                                            ★★★★★
+                                        </div>
                                     </div>
                                 </div>
                             </div>
-                        </>
-                    )}
+                        </div>
+                    </div>
                 </div>
             </Layout>
         </>

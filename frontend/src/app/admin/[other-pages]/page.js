@@ -7,14 +7,14 @@ import Layout from '@/components/Layout'
 import {
     Truck, Plus, FileText, MessageSquare, Settings,
     TrendingUp, Wrench, Activity, Clock, CheckCircle,
-    AlertTriangle, Package, Users, Search, Filter
+    AlertTriangle, Package, Users, Search, Filter,
+    Edit, Trash2, Save, X, ChevronDown, RefreshCw
 } from 'lucide-react'
 
 export default function AdminOtherPages() {
     const { data: session, status } = useSession()
     const router = useRouter()
     const params = useParams()
-    const [loading, setLoading] = useState(false)
 
     useEffect(() => {
         if (status === 'loading') return
@@ -29,16 +29,9 @@ export default function AdminOtherPages() {
         
         switch(page) {
             case 'machines':
-                // This would be handled by a dedicated machines page
-                break
             case 'add-machine':
-                // This would be handled by a dedicated add-machine page
-                break
             case 'add-order':
-                // This would be handled by a dedicated add-order page
-                break
             case 'requests':
-                // This would be handled by a dedicated requests page
                 break
             default:
                 // Redirect to dashboard if unknown page
@@ -51,8 +44,10 @@ export default function AdminOtherPages() {
     if (status === 'loading') {
         return (
             <Layout>
-                <div className="flex items-center justify-center min-h-screen">
-                    <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
+                <div className="admin-container">
+                    <div className="loading-container">
+                        <div className="loading-spinner"></div>
+                    </div>
                 </div>
             </Layout>
         )
@@ -69,22 +64,34 @@ export default function AdminOtherPages() {
     const renderPageContent = () => {
         switch(page) {
             case 'machines':
-                return <AdminMachines />
+                return <AdminMachines session={session} />
             case 'add-machine':
-                return <AddMachine />
+                return <AddMachine session={session} />
             case 'add-order':
-                return <AddOrder />
+                return <AddOrder session={session} />
             case 'requests':
-                return <ManageRequests />
+                return <ManageRequests session={session} />
             default:
-                return <div>Page not found. Redirecting...</div>
+                return (
+                    <div className="empty-state">
+                        <div className="empty-state-icon">
+                            <AlertTriangle />
+                        </div>
+                        <h3 className="empty-state-title">Page not found</h3>
+                        <p className="empty-state-description">
+                            <a href="/admin/dashboard" className="btn-secondary-modern">
+                                Return to Dashboard
+                            </a>
+                        </p>
+                    </div>
+                )
         }
     }
 
     return (
         <Layout>
-            <div className="min-h-screen bg-gray-50 py-8">
-                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="admin-container">
+                <div className="admin-content">
                     {renderPageContent()}
                 </div>
             </div>
@@ -93,167 +100,227 @@ export default function AdminOtherPages() {
 }
 
 // Component for Admin Machines Management page
-function AdminMachines() {
+function AdminMachines({ session }) {
     const [machines, setMachines] = useState([])
     const [loading, setLoading] = useState(true)
     const [filter, setFilter] = useState('all')
     const [searchTerm, setSearchTerm] = useState('')
-
-    const mockMachines = [
-        {
-            id: 'CAT001',
-            type: 'Excavator 320',
-            status: 'Ready',
-            location: 'Warehouse A',
-            lastUpdated: '2024-01-15'
-        },
-        {
-            id: 'CAT002',
-            type: 'Bulldozer D6',
-            status: 'Occupied',
-            location: 'Site B',
-            lastUpdated: '2024-01-14'
-        },
-        {
-            id: 'CAT003',
-            type: 'Loader 950',
-            status: 'Maintenance',
-            location: 'Service Center',
-            lastUpdated: '2024-01-13'
-        }
-    ]
+    const [error, setError] = useState('')
 
     useEffect(() => {
-        // Simulate API call
-        setTimeout(() => {
-            setMachines(mockMachines)
+        fetchMachines()
+    }, [session])
+
+    const fetchMachines = async () => {
+        try {
+            setLoading(true)
+            setError('')
+            
+            const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/admin/machines`, {
+                headers: {
+                    'Authorization': `Bearer ${session.accessToken}`,
+                },
+            })
+
+            if (!response.ok) {
+                throw new Error('Failed to fetch machines')
+            }
+
+            const data = await response.json()
+            if (data.success) {
+                setMachines(data.data.machines || [])
+            } else {
+                throw new Error(data.message || 'Failed to load machines')
+            }
+        } catch (err) {
+            console.error('Error fetching machines:', err)
+            setError(err.message)
+        } finally {
             setLoading(false)
-        }, 1000)
-    }, [])
+        }
+    }
+
+    const deleteMachine = async (machineId) => {
+        if (!confirm('Are you sure you want to delete this machine? This action cannot be undone.')) return
+
+        try {
+            const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/machines/${machineId}`, {
+                method: 'DELETE',
+                headers: {
+                    'Authorization': `Bearer ${session.accessToken}`,
+                },
+            })
+
+            if (!response.ok) {
+                throw new Error('Failed to delete machine')
+            }
+
+            const data = await response.json()
+            if (data.success) {
+                setMachines(machines.filter(machine => machine.machineID !== machineId))
+            } else {
+                throw new Error(data.message || 'Failed to delete machine')
+            }
+        } catch (err) {
+            console.error('Error deleting machine:', err)
+            alert('Error deleting machine: ' + err.message)
+        }
+    }
 
     const getStatusBadge = (status) => {
         const statusConfig = {
-            'Ready': { class: 'bg-green-100 text-green-800', icon: CheckCircle },
-            'Occupied': { class: 'bg-blue-100 text-blue-800', icon: Activity },
-            'Maintenance': { class: 'bg-yellow-100 text-yellow-800', icon: Wrench },
-            'In-transit': { class: 'bg-purple-100 text-purple-800', icon: Truck }
+            'Ready': { class: 'badge-ready-modern', icon: CheckCircle },
+            'Occupied': { class: 'badge-occupied-modern', icon: Activity },
+            'Maintenance': { class: 'badge-maintenance-modern', icon: Wrench },
+            'In-transit': { class: 'badge-in-transit-modern', icon: Truck }
         }
-        
-        const config = statusConfig[status] || { class: 'bg-gray-100 text-gray-800', icon: Clock }
+
+        const config = statusConfig[status] || { class: 'badge-pending-modern', icon: Clock }
         const IconComponent = config.icon
 
         return (
-            <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${config.class}`}>
-                <IconComponent className="w-3 h-3 mr-1" />
+            <span className={`badge-modern ${config.class}`}>
+                <IconComponent size={12} />
                 {status}
             </span>
         )
     }
 
     const filteredMachines = machines.filter(machine => {
-        const matchesFilter = filter === 'all' || machine.status.toLowerCase() === filter
-        const matchesSearch = machine.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                             machine.type.toLowerCase().includes(searchTerm.toLowerCase())
+        const matchesFilter = filter === 'all' || machine.status.toLowerCase() === filter.toLowerCase()
+        const matchesSearch = machine.machineID.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                             machine.machineType.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                             (machine.location && machine.location.toLowerCase().includes(searchTerm.toLowerCase()))
         return matchesFilter && matchesSearch
     })
 
     return (
         <div>
-            <div className="mb-8">
-                <h1 className="text-3xl font-bold text-gray-900 flex items-center">
-                    <Settings className="h-8 w-8 mr-3 text-blue-600" />
-                    All Machines
+            {/* Page Header */}
+            <div className="page-header">
+                <h1 className="page-title">
+                    <Truck className="page-title-icon" />
+                    Manage Machines
                 </h1>
-                <p className="mt-2 text-gray-600">
-                    Manage your entire fleet of construction equipment
+                <p className="page-subtitle">
+                    View and manage your fleet of construction equipment
                 </p>
             </div>
 
-            {/* Filters and Search */}
-            <div className="bg-white rounded-lg shadow p-6 mb-6">
-                <div className="flex flex-col sm:flex-row gap-4">
-                    <div className="flex items-center space-x-2">
-                        <Search className="h-5 w-5 text-gray-400" />
-                        <input
-                            type="text"
-                            placeholder="Search machines..."
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                            className="form-input flex-1"
-                        />
+            {/* Error Alert */}
+            {error && (
+                <div className="alert-modern alert-error-modern">
+                    <AlertTriangle className="alert-icon" />
+                    <div className="alert-content">
+                        <div className="alert-message">{error}</div>
+                        <button onClick={fetchMachines} className="alert-action">
+                            Try again
+                        </button>
                     </div>
-                    <div className="flex items-center space-x-2">
-                        <Filter className="h-5 w-5 text-gray-400" />
-                        <select
-                            value={filter}
-                            onChange={(e) => setFilter(e.target.value)}
-                            className="form-input"
+                </div>
+            )}
+
+            {/* Filters */}
+            <div className="card-filters">
+                <div className="filters-row">
+                    <div className="filters-left">
+                        <div className="search-input-wrapper">
+                            <Search className="search-icon" />
+                            <input
+                                type="text"
+                                placeholder="Search machines..."
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                                className="search-input"
+                            />
+                        </div>
+                        <div className="filter-select-wrapper">
+                            <Filter className="filter-icon" />
+                            <select
+                                value={filter}
+                                onChange={(e) => setFilter(e.target.value)}
+                                className="filter-select"
+                            >
+                                <option value="all">All Status</option>
+                                <option value="ready">Ready</option>
+                                <option value="occupied">Occupied</option>
+                                <option value="maintenance">Maintenance</option>
+                                <option value="in-transit">In-transit</option>
+                            </select>
+                            <ChevronDown className="select-arrow" />
+                        </div>
+                    </div>
+                    <div className="filters-right">
+                        <button
+                            onClick={fetchMachines}
+                            className="btn-modern btn-secondary-modern"
+                            disabled={loading}
                         >
-                            <option value="all">All Status</option>
-                            <option value="ready">Ready</option>
-                            <option value="occupied">Occupied</option>
-                            <option value="maintenance">Maintenance</option>
-                        </select>
+                            <RefreshCw size={16} />
+                            Refresh
+                        </button>
+                        <a
+                            href="/admin/add-machine"
+                            className="btn-modern btn-primary-modern"
+                        >
+                            <Plus size={16} />
+                            Add Machine
+                        </a>
                     </div>
                 </div>
             </div>
 
             {/* Machines Table */}
-            <div className="bg-white rounded-lg shadow overflow-hidden">
+            <div className="modern-card">
                 {loading ? (
-                    <div className="flex items-center justify-center py-12">
-                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                    <div className="loading-container">
+                        <div className="loading-spinner"></div>
+                    </div>
+                ) : filteredMachines.length === 0 ? (
+                    <div className="empty-state">
+                        <Truck className="empty-state-icon" />
+                        <h3 className="empty-state-title">No machines found</h3>
+                        <p className="empty-state-description">
+                            {machines.length === 0 
+                                ? 'Get started by adding your first machine.' 
+                                : 'No machines match your current filters.'}
+                        </p>
                     </div>
                 ) : (
-                    <div className="overflow-x-auto">
-                        <table className="min-w-full divide-y divide-gray-200">
-                            <thead className="bg-gray-50">
+                    <div className="modern-table-container">
+                        <table className="modern-table">
+                            <thead>
                                 <tr>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                        Machine ID
-                                    </th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                        Type
-                                    </th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                        Status
-                                    </th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                        Location
-                                    </th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                        Last Updated
-                                    </th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                        Actions
-                                    </th>
+                                    <th>Machine ID</th>
+                                    <th>Type</th>
+                                    <th>Status</th>
+                                    <th>Location</th>
+                                    <th>Last Updated</th>
+                                    <th>Actions</th>
                                 </tr>
                             </thead>
-                            <tbody className="bg-white divide-y divide-gray-200">
+                            <tbody>
                                 {filteredMachines.map((machine) => (
-                                    <tr key={machine.id} className="hover:bg-gray-50">
-                                        <td className="px-6 py-4 whitespace-nowrap font-medium text-gray-900">
-                                            {machine.id}
+                                    <tr key={machine.machineID}>
+                                        <td>
+                                            <strong>{machine.machineID}</strong>
                                         </td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-gray-500">
-                                            {machine.type}
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap">
-                                            {getStatusBadge(machine.status)}
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-gray-500">
-                                            {machine.location}
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-gray-500">
-                                            {machine.lastUpdated}
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm">
-                                            <button className="text-blue-600 hover:text-blue-900 mr-3">
-                                                Edit
-                                            </button>
-                                            <button className="text-red-600 hover:text-red-900">
-                                                Delete
-                                            </button>
+                                        <td>{machine.machineType}</td>
+                                        <td>{getStatusBadge(machine.status)}</td>
+                                        <td>{machine.location || 'Not specified'}</td>
+                                        <td>{new Date(machine.updatedAt).toLocaleDateString()}</td>
+                                        <td>
+                                            <div className="action-buttons">
+                                                <button className="action-btn action-btn-edit">
+                                                    <Edit size={14} />
+                                                </button>
+                                                <button 
+                                                    onClick={() => deleteMachine(machine.machineID)}
+                                                    className="action-btn action-btn-delete"
+                                                >
+                                                    <Trash2 size={14} />
+                                                </button>
+                                            </div>
                                         </td>
                                     </tr>
                                 ))}
@@ -267,208 +334,286 @@ function AdminMachines() {
 }
 
 // Component for Add Machine page
-function AddMachine() {
+function AddMachine({ session }) {
     const [formData, setFormData] = useState({
         machineId: '',
         machineType: '',
-        manufacturer: 'Caterpillar',
-        model: '',
-        year: new Date().getFullYear(),
         location: '',
-        status: 'Ready'
+        siteId: ''
     })
     const [isScanning, setIsScanning] = useState(false)
+    const [isSubmitting, setIsSubmitting] = useState(false)
+    const [errors, setErrors] = useState({})
+    const router = useRouter()
 
-    const handleSubmit = (e) => {
+    const handleSubmit = async (e) => {
         e.preventDefault()
-        console.log('Adding machine:', formData)
-        // Handle form submission
+        
+        // Validate form
+        const newErrors = {}
+        if (!formData.machineId.trim()) newErrors.machineId = 'Machine ID is required'
+        if (!formData.machineType.trim()) newErrors.machineType = 'Machine type is required'
+        if (!formData.location.trim()) newErrors.location = 'Location is required'
+
+        if (Object.keys(newErrors).length > 0) {
+            setErrors(newErrors)
+            return
+        }
+
+        setIsSubmitting(true)
+        setErrors({})
+
+        try {
+            const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/machines`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${session.accessToken}`,
+                },
+                body: JSON.stringify({
+                    machine_id: formData.machineId.trim(),
+                    machine_type: formData.machineType.trim(),
+                    location: formData.location.trim(),
+                    site_id: formData.siteId.trim() || null
+                }),
+            })
+
+            const data = await response.json()
+
+            if (!response.ok) {
+                throw new Error(data.detail || 'Failed to create machine')
+            }
+
+            if (data.success) {
+                alert('Machine added successfully!')
+                router.push('/admin/machines')
+            } else {
+                throw new Error(data.message || 'Failed to create machine')
+            }
+        } catch (err) {
+            console.error('Error creating machine:', err)
+            if (err.message.includes('already exists')) {
+                setErrors({ machineId: 'Machine ID already exists' })
+            } else {
+                alert('Error creating machine: ' + err.message)
+            }
+        } finally {
+            setIsSubmitting(false)
+        }
     }
 
     const handleChange = (e) => {
+        const { name, value } = e.target
         setFormData({
             ...formData,
-            [e.target.name]: e.target.value
+            [name]: value
         })
+        
+        // Clear error when user starts typing
+        if (errors[name]) {
+            setErrors({
+                ...errors,
+                [name]: ''
+            })
+        }
     }
 
-    const handleBarcodeSearch = () => {
+    const handleBarcodeSearch = async () => {
         setIsScanning(true)
-        // Simulate barcode scanning
-        setTimeout(() => {
-            setFormData({
-                ...formData,
-                machineId: 'CAT-' + Math.random().toString(36).substr(2, 9).toUpperCase(),
-                machineType: 'Excavator 320',
-                model: '320GC'
-            })
+        
+        try {
+            // Create a file input for image upload (simulating barcode scan)
+            const fileInput = document.createElement('input')
+            fileInput.type = 'file'
+            fileInput.accept = 'image/*'
+            fileInput.capture = 'environment' // Use camera on mobile
+            
+            fileInput.onchange = async (e) => {
+                const file = e.target.files[0]
+                if (file) {
+                    try {
+                        const formData = new FormData()
+                        formData.append('file', file)
+
+                        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/machines/scan-barcode`, {
+                            method: 'POST',
+                            headers: {
+                                'Authorization': `Bearer ${session.accessToken}`,
+                            },
+                            body: formData,
+                        })
+
+                        const data = await response.json()
+                        
+                        if (data.success && data.data.barcodes && data.data.barcodes.length > 0) {
+                            const barcode = data.data.barcodes[0]
+                            setFormData({
+                                ...formData,
+                                machineId: barcode.machine_id || '',
+                                machineType: barcode.machine_type || ''
+                            })
+                        } else {
+                            alert('No barcode data found in image')
+                        }
+                    } catch (error) {
+                        console.error('Barcode scan error:', error)
+                        alert('Error processing barcode: ' + error.message)
+                    }
+                }
+                setIsScanning(false)
+            }
+            
+            fileInput.click()
+        } catch (error) {
+            console.error('Barcode scan setup error:', error)
             setIsScanning(false)
-        }, 2000)
+        }
     }
 
     return (
         <div>
-            <div className="mb-8">
-                <h1 className="text-3xl font-bold text-gray-900 flex items-center">
-                    <Plus className="h-8 w-8 mr-3 text-blue-600" />
+            {/* Page Header */}
+            <div className="page-header">
+                <h1 className="page-title">
+                    <Plus className="page-title-icon" />
                     Add New Machine
                 </h1>
-                <p className="mt-2 text-gray-600">
+                <p className="page-subtitle">
                     Add new construction equipment to your fleet
                 </p>
             </div>
 
-            <div className="bg-white rounded-lg shadow p-6 max-w-3xl">
-                {/* Barcode Scanner Section */}
-                <div className="mb-8 p-4 border-2 border-dashed border-gray-300 rounded-lg text-center">
-                    <Truck className="h-12 w-12 mx-auto text-gray-400 mb-4" />
-                    <h3 className="text-lg font-medium text-gray-900 mb-2">Scan Machine Barcode</h3>
-                    <p className="text-gray-500 mb-4">
-                        Quickly populate machine details by scanning the equipment barcode
-                    </p>
-                    <button
-                        type="button"
-                        onClick={handleBarcodeSearch}
-                        disabled={isScanning}
-                        className="btn-secondary flex items-center mx-auto"
-                    >
-                        {isScanning ? (
-                            <>
-                                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600 mr-2"></div>
-                                Scanning...
-                            </>
-                        ) : (
-                            <>
-                                <Search className="h-5 w-5 mr-2" />
-                                Scan Barcode
-                            </>
-                        )}
-                    </button>
-                </div>
+            {/* Barcode Scanner Section */}
+            <div className="barcode-scanner">
+                <Truck className="barcode-icon" />
+                <h3 className="barcode-title">Scan Machine Barcode</h3>
+                <p className="barcode-description">
+                    Quickly populate machine details by scanning the equipment barcode
+                </p>
+                <button
+                    type="button"
+                    onClick={handleBarcodeSearch}
+                    disabled={isScanning}
+                    className="btn-modern btn-secondary-modern"
+                >
+                    {isScanning ? (
+                        <>
+                            <div className="loading-spinner" style={{ width: '1rem', height: '1rem', borderWidth: '2px' }}></div>
+                            Processing...
+                        </>
+                    ) : (
+                        <>
+                            <Search size={16} />
+                            Scan Barcode
+                        </>
+                    )}
+                </button>
+            </div>
 
-                <form onSubmit={handleSubmit} className="space-y-6">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">
-                                Machine ID *
+            {/* Manual Entry Form */}
+            <div className="modern-form">
+                <form onSubmit={handleSubmit}>
+                    <div className="form-grid">
+                        <div className="form-group-modern">
+                            <label className="form-label-modern form-label-required">
+                                Machine ID
                             </label>
                             <input
                                 type="text"
                                 name="machineId"
                                 value={formData.machineId}
                                 onChange={handleChange}
-                                className="form-input"
-                                placeholder="e.g., CAT-EX-001"
-                                required
+                                className={`form-input-modern ${errors.machineId ? 'form-input-error' : ''}`}
+                                placeholder="e.g., CAT001"
                             />
+                            {errors.machineId && (
+                                <div className="form-error-message">
+                                    <AlertTriangle size={12} />
+                                    {errors.machineId}
+                                </div>
+                            )}
                         </div>
 
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">
-                                Machine Type *
-                            </label>
-                            <select
-                                name="machineType"
-                                value={formData.machineType}
-                                onChange={handleChange}
-                                className="form-input"
-                                required
-                            >
-                                <option value="">Select machine type...</option>
-                                <option value="Excavator">Excavator</option>
-                                <option value="Bulldozer">Bulldozer</option>
-                                <option value="Loader">Loader</option>
-                                <option value="Crane">Crane</option>
-                                <option value="Grader">Grader</option>
-                                <option value="Compactor">Compactor</option>
-                            </select>
-                        </div>
-
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">
-                                Manufacturer
-                            </label>
-                            <select
-                                name="manufacturer"
-                                value={formData.manufacturer}
-                                onChange={handleChange}
-                                className="form-input"
-                            >
-                                <option value="Caterpillar">Caterpillar</option>
-                                <option value="Komatsu">Komatsu</option>
-                                <option value="John Deere">John Deere</option>
-                                <option value="Volvo">Volvo</option>
-                            </select>
-                        </div>
-
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">
-                                Model
+                        <div className="form-group-modern">
+                            <label className="form-label-modern form-label-required">
+                                Machine Type
                             </label>
                             <input
                                 type="text"
-                                name="model"
-                                value={formData.model}
+                                name="machineType"
+                                value={formData.machineType}
                                 onChange={handleChange}
-                                className="form-input"
-                                placeholder="e.g., 320GC"
+                                className={`form-input-modern ${errors.machineType ? 'form-input-error' : ''}`}
+                                placeholder="e.g., Excavator 320"
                             />
+                            {errors.machineType && (
+                                <div className="form-error-message">
+                                    <AlertTriangle size={12} />
+                                    {errors.machineType}
+                                </div>
+                            )}
                         </div>
 
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">
-                                Year
-                            </label>
-                            <input
-                                type="number"
-                                name="year"
-                                value={formData.year}
-                                onChange={handleChange}
-                                className="form-input"
-                                min="1990"
-                                max={new Date().getFullYear() + 1}
-                            />
-                        </div>
-
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">
-                                Current Location *
+                        <div className="form-group-modern">
+                            <label className="form-label-modern form-label-required">
+                                Location
                             </label>
                             <input
                                 type="text"
                                 name="location"
                                 value={formData.location}
                                 onChange={handleChange}
-                                className="form-input"
+                                className={`form-input-modern ${errors.location ? 'form-input-error' : ''}`}
                                 placeholder="e.g., Warehouse A"
-                                required
                             />
+                            {errors.location && (
+                                <div className="form-error-message">
+                                    <AlertTriangle size={12} />
+                                    {errors.location}
+                                </div>
+                            )}
                         </div>
 
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">
-                                Initial Status
+                        <div className="form-group-modern">
+                            <label className="form-label-modern">
+                                Site ID
                             </label>
-                            <select
-                                name="status"
-                                value={formData.status}
+                            <input
+                                type="text"
+                                name="siteId"
+                                value={formData.siteId}
                                 onChange={handleChange}
-                                className="form-input"
-                            >
-                                <option value="Ready">Ready</option>
-                                <option value="Maintenance">Maintenance</option>
-                                <option value="In-transit">In-transit</option>
-                            </select>
+                                className="form-input-modern"
+                                placeholder="e.g., SITE001 (optional)"
+                            />
                         </div>
                     </div>
 
-                    <div className="flex gap-4 pt-6">
-                        <button type="submit" className="btn-primary flex items-center">
-                            <Plus className="h-5 w-5 mr-2" />
-                            Add Machine
-                        </button>
-                        <button type="button" className="btn-secondary">
+                    <div className="form-actions">
+                        <button
+                            type="button"
+                            onClick={() => router.back()}
+                            className="btn-modern btn-secondary-modern"
+                        >
+                            <X size={16} />
                             Cancel
+                        </button>
+                        <button
+                            type="submit"
+                            disabled={isSubmitting}
+                            className="btn-modern btn-primary-modern"
+                        >
+                            {isSubmitting ? (
+                                <>
+                                    <div className="loading-spinner" style={{ width: '1rem', height: '1rem', borderWidth: '2px' }}></div>
+                                    Adding...
+                                </>
+                            ) : (
+                                <>
+                                    <Save size={16} />
+                                    Add Machine
+                                </>
+                            )}
                         </button>
                     </div>
                 </form>
@@ -477,176 +622,271 @@ function AddMachine() {
     )
 }
 
-// Component for Add Order page
-function AddOrder() {
+// Component for Add Order page (Machine Assignment)
+function AddOrder({ session }) {
     const [formData, setFormData] = useState({
+        machineId: '',
         customerId: '',
-        machineType: '',
-        quantity: 1,
-        startDate: '',
-        endDate: '',
-        location: '',
-        priority: 'medium',
-        notes: ''
+        checkOutDate: '',
+        checkInDate: '',
+        siteId: ''
     })
+    const [machines, setMachines] = useState([])
+    const [loading, setLoading] = useState(true)
+    const [isSubmitting, setIsSubmitting] = useState(false)
+    const [errors, setErrors] = useState({})
 
-    const handleSubmit = (e) => {
+    useEffect(() => {
+        fetchAvailableMachines()
+    }, [session])
+
+    const fetchAvailableMachines = async () => {
+        try {
+            const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/admin/machines?status=Ready`, {
+                headers: {
+                    'Authorization': `Bearer ${session.accessToken}`,
+                },
+            })
+
+            if (response.ok) {
+                const data = await response.json()
+                if (data.success) {
+                    setMachines(data.data.machines || [])
+                }
+            }
+        } catch (error) {
+            console.error('Error fetching machines:', error)
+        } finally {
+            setLoading(false)
+        }
+    }
+
+    const handleSubmit = async (e) => {
         e.preventDefault()
-        console.log('Creating order:', formData)
+        
+        // Validate form
+        const newErrors = {}
+        if (!formData.machineId) newErrors.machineId = 'Machine is required'
+        if (!formData.customerId.trim()) newErrors.customerId = 'Customer ID is required'
+        if (!formData.checkOutDate) newErrors.checkOutDate = 'Check-out date is required'
+        if (!formData.checkInDate) newErrors.checkInDate = 'Check-in date is required'
+        if (!formData.siteId.trim()) newErrors.siteId = 'Site ID is required'
+
+        if (Object.keys(newErrors).length > 0) {
+            setErrors(newErrors)
+            return
+        }
+
+        setIsSubmitting(true)
+        setErrors({})
+
+        try {
+            const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/machines/${formData.machineId}/assign`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${session.accessToken}`,
+                },
+                body: JSON.stringify({
+                    user_id: formData.customerId.trim(),
+                    site_id: formData.siteId.trim(),
+                    check_out_date: new Date(formData.checkOutDate).toISOString(),
+                    check_in_date: new Date(formData.checkInDate).toISOString()
+                }),
+            })
+
+            const data = await response.json()
+
+            if (!response.ok) {
+                throw new Error(data.detail || 'Failed to assign machine')
+            }
+
+            if (data.success) {
+                alert('Machine assigned successfully!')
+                // Reset form
+                setFormData({
+                    machineId: '',
+                    customerId: '',
+                    checkOutDate: '',
+                    checkInDate: '',
+                    siteId: ''
+                })
+                fetchAvailableMachines()
+            } else {
+                throw new Error(data.message || 'Failed to assign machine')
+            }
+        } catch (err) {
+            console.error('Error assigning machine:', err)
+            alert('Error assigning machine: ' + err.message)
+        } finally {
+            setIsSubmitting(false)
+        }
     }
 
     const handleChange = (e) => {
+        const { name, value } = e.target
         setFormData({
             ...formData,
-            [e.target.name]: e.target.value
+            [name]: value
         })
+        
+        // Clear error when user starts typing
+        if (errors[name]) {
+            setErrors({
+                ...errors,
+                [name]: ''
+            })
+        }
     }
 
     return (
         <div>
-            <div className="mb-8">
-                <h1 className="text-3xl font-bold text-gray-900 flex items-center">
-                    <FileText className="h-8 w-8 mr-3 text-blue-600" />
-                    Create New Order
+            {/* Page Header */}
+            <div className="page-header">
+                <h1 className="page-title">
+                    <Plus className="page-title-icon" />
+                    Assign Machine
                 </h1>
-                <p className="mt-2 text-gray-600">
-                    Process equipment rental orders for customers
+                <p className="page-subtitle">
+                    Assign available equipment to customers
                 </p>
             </div>
 
-            <div className="bg-white rounded-lg shadow p-6 max-w-3xl">
-                <form onSubmit={handleSubmit} className="space-y-6">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">
-                                Customer ID *
+            {/* Assignment Form */}
+            <div className="modern-form">
+                <form onSubmit={handleSubmit}>
+                    <div className="form-grid">
+                        <div className="form-group-modern">
+                            <label className="form-label-modern form-label-required">
+                                Available Machine
+                            </label>
+                            <select
+                                name="machineId"
+                                value={formData.machineId}
+                                onChange={handleChange}
+                                className={`form-input-modern ${errors.machineId ? 'form-input-error' : ''}`}
+                            >
+                                <option value="">Select a machine</option>
+                                {machines.map((machine) => (
+                                    <option key={machine.machineID} value={machine.machineID}>
+                                        {machine.machineID} - {machine.machineType} ({machine.location})
+                                    </option>
+                                ))}
+                            </select>
+                            {errors.machineId && (
+                                <div className="form-error-message">
+                                    <AlertTriangle size={12} />
+                                    {errors.machineId}
+                                </div>
+                            )}
+                            {loading && <p style={{ fontSize: '0.9rem', color: 'var(--cat-medium-gray)', marginTop: '0.5rem' }}>Loading machines...</p>}
+                        </div>
+
+                        <div className="form-group-modern">
+                            <label className="form-label-modern form-label-required">
+                                Customer ID
                             </label>
                             <input
                                 type="text"
                                 name="customerId"
                                 value={formData.customerId}
                                 onChange={handleChange}
-                                className="form-input"
-                                placeholder="Enter customer ID"
-                                required
+                                className={`form-input-modern ${errors.customerId ? 'form-input-error' : ''}`}
+                                placeholder="e.g., CUST001"
                             />
+                            {errors.customerId && (
+                                <div className="form-error-message">
+                                    <AlertTriangle size={12} />
+                                    {errors.customerId}
+                                </div>
+                            )}
                         </div>
 
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">
-                                Machine Type *
-                            </label>
-                            <select
-                                name="machineType"
-                                value={formData.machineType}
-                                onChange={handleChange}
-                                className="form-input"
-                                required
-                            >
-                                <option value="">Select machine type...</option>
-                                <option value="Excavator">Excavator</option>
-                                <option value="Bulldozer">Bulldozer</option>
-                                <option value="Loader">Loader</option>
-                                <option value="Crane">Crane</option>
-                            </select>
-                        </div>
-
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">
-                                Quantity
-                            </label>
-                            <input
-                                type="number"
-                                name="quantity"
-                                value={formData.quantity}
-                                onChange={handleChange}
-                                className="form-input"
-                                min="1"
-                                max="10"
-                            />
-                        </div>
-
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">
-                                Priority
-                            </label>
-                            <select
-                                name="priority"
-                                value={formData.priority}
-                                onChange={handleChange}
-                                className="form-input"
-                            >
-                                <option value="low">Low</option>
-                                <option value="medium">Medium</option>
-                                <option value="high">High</option>
-                            </select>
-                        </div>
-
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">
-                                Start Date *
+                        <div className="form-group-modern">
+                            <label className="form-label-modern form-label-required">
+                                Check-out Date
                             </label>
                             <input
                                 type="date"
-                                name="startDate"
-                                value={formData.startDate}
+                                name="checkOutDate"
+                                value={formData.checkOutDate}
                                 onChange={handleChange}
-                                className="form-input"
-                                required
+                                min={new Date().toISOString().split('T')[0]}
+                                className={`form-input-modern ${errors.checkOutDate ? 'form-input-error' : ''}`}
                             />
+                            {errors.checkOutDate && (
+                                <div className="form-error-message">
+                                    <AlertTriangle size={12} />
+                                    {errors.checkOutDate}
+                                </div>
+                            )}
                         </div>
 
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">
-                                End Date *
+                        <div className="form-group-modern">
+                            <label className="form-label-modern form-label-required">
+                                Expected Check-in Date
                             </label>
                             <input
                                 type="date"
-                                name="endDate"
-                                value={formData.endDate}
+                                name="checkInDate"
+                                value={formData.checkInDate}
                                 onChange={handleChange}
-                                className="form-input"
-                                required
+                                min={formData.checkOutDate || new Date().toISOString().split('T')[0]}
+                                className={`form-input-modern ${errors.checkInDate ? 'form-input-error' : ''}`}
                             />
+                            {errors.checkInDate && (
+                                <div className="form-error-message">
+                                    <AlertTriangle size={12} />
+                                    {errors.checkInDate}
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="form-group-modern" style={{ gridColumn: '1 / -1' }}>
+                            <label className="form-label-modern form-label-required">
+                                Site ID
+                            </label>
+                            <input
+                                type="text"
+                                name="siteId"
+                                value={formData.siteId}
+                                onChange={handleChange}
+                                className={`form-input-modern ${errors.siteId ? 'form-input-error' : ''}`}
+                                placeholder="e.g., SITE001"
+                            />
+                            {errors.siteId && (
+                                <div className="form-error-message">
+                                    <AlertTriangle size={12} />
+                                    {errors.siteId}
+                                </div>
+                            )}
                         </div>
                     </div>
 
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                            Delivery Location *
-                        </label>
-                        <input
-                            type="text"
-                            name="location"
-                            value={formData.location}
-                            onChange={handleChange}
-                            className="form-input"
-                            placeholder="Enter delivery address"
-                            required
-                        />
-                    </div>
-
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                            Additional Notes
-                        </label>
-                        <textarea
-                            name="notes"
-                            value={formData.notes}
-                            onChange={handleChange}
-                            rows={4}
-                            className="form-input"
-                            placeholder="Any special requirements or notes..."
-                        />
-                    </div>
-
-                    <div className="flex gap-4 pt-6">
-                        <button type="submit" className="btn-primary flex items-center">
-                            <Package className="h-5 w-5 mr-2" />
-                            Create Order
+                    <div className="form-actions">
+                        <button
+                            type="button"
+                            className="btn-modern btn-secondary-modern"
+                        >
+                            <X size={16} />
+                            Cancel
                         </button>
-                        <button type="button" className="btn-secondary">
-                            Save as Draft
+                        <button
+                            type="submit"
+                            disabled={isSubmitting}
+                            className="btn-modern btn-primary-modern"
+                        >
+                            {isSubmitting ? (
+                                <>
+                                    <div className="loading-spinner" style={{ width: '1rem', height: '1rem', borderWidth: '2px' }}></div>
+                                    Assigning...
+                                </>
+                            ) : (
+                                <>
+                                    <Save size={16} />
+                                    Assign Machine
+                                </>
+                            )}
                         </button>
                     </div>
                 </form>
@@ -656,159 +896,244 @@ function AddOrder() {
 }
 
 // Component for Manage Requests page
-function ManageRequests() {
+function ManageRequests({ session }) {
     const [requests, setRequests] = useState([])
     const [loading, setLoading] = useState(true)
     const [filter, setFilter] = useState('all')
-
-    const mockRequests = [
-        {
-            id: 'REQ001',
-            customerId: 'CUST001',
-            machineType: 'Excavator',
-            status: 'In-Progress',
-            requestDate: '2024-01-15',
-            priority: 'high'
-        },
-        {
-            id: 'REQ002',
-            customerId: 'CUST002',
-            machineType: 'Bulldozer',
-            status: 'Approved',
-            requestDate: '2024-01-14',
-            priority: 'medium'
-        }
-    ]
+    const [searchTerm, setSearchTerm] = useState('')
+    const [error, setError] = useState('')
 
     useEffect(() => {
-        setTimeout(() => {
-            setRequests(mockRequests)
-            setLoading(false)
-        }, 1000)
-    }, [])
+        fetchRequests()
+    }, [session])
 
-    const getStatusBadge = (status) => {
-        const statusConfig = {
-            'In-Progress': { class: 'bg-yellow-100 text-yellow-800', icon: Clock },
-            'Approved': { class: 'bg-green-100 text-green-800', icon: CheckCircle },
-            'Denied': { class: 'bg-red-100 text-red-800', icon: AlertTriangle }
+    const fetchRequests = async () => {
+        try {
+            setLoading(true)
+            setError('')
+            
+            let url = `${process.env.NEXT_PUBLIC_API_URL}/api/requests`
+            if (filter !== 'all') {
+                url += `?status=${encodeURIComponent(filter)}`
+            }
+
+            const response = await fetch(url, {
+                headers: {
+                    'Authorization': `Bearer ${session.accessToken}`,
+                },
+            })
+
+            if (!response.ok) {
+                throw new Error('Failed to fetch requests')
+            }
+
+            const data = await response.json()
+            if (data.success) {
+                setRequests(data.data || [])
+            } else {
+                throw new Error(data.message || 'Failed to load requests')
+            }
+        } catch (err) {
+            console.error('Error fetching requests:', err)
+            setError(err.message)
+        } finally {
+            setLoading(false)
         }
-        
-        const config = statusConfig[status] || { class: 'bg-gray-100 text-gray-800', icon: Clock }
+    }
+
+    const updateRequestStatus = async (requestId, newStatus, adminComments = '') => {
+        try {
+            const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/requests/${requestId}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${session.accessToken}`,
+                },
+                body: JSON.stringify({
+                    status: newStatus,
+                    admin_comments: adminComments
+                }),
+            })
+
+            const data = await response.json()
+
+            if (!response.ok) {
+                throw new Error(data.detail || 'Failed to update request')
+            }
+
+            if (data.success) {
+                // Update the request in the local state
+                setRequests(requests.map(request => 
+                    request.requestID === requestId 
+                        ? { ...request, status: newStatus, adminComments: adminComments }
+                        : request
+                ))
+            } else {
+                throw new Error(data.message || 'Failed to update request')
+            }
+        } catch (err) {
+            console.error('Error updating request:', err)
+            alert('Error updating request: ' + err.message)
+        }
+    }
+
+    const handleStatusChange = (requestId, currentStatus) => {
+        const newStatus = prompt(`Enter new status for request ${requestId}:`, currentStatus)
+        if (newStatus && newStatus !== currentStatus) {
+            const adminComments = prompt('Add admin comments (optional):') || ''
+            updateRequestStatus(requestId, newStatus, adminComments)
+        }
+    }
+
+    const getRequestStatusBadge = (status) => {
+        const statusConfig = {
+            'IN_PROGRESS': { class: 'badge-occupied-modern', icon: Clock },
+            'COMPLETED': { class: 'badge-ready-modern', icon: CheckCircle },
+            'CANCELLED': { class: 'badge-maintenance-modern', icon: X },
+            'PENDING': { class: 'badge-pending-modern', icon: Clock }
+        }
+
+        const config = statusConfig[status] || { class: 'badge-pending-modern', icon: Clock }
         const IconComponent = config.icon
 
         return (
-            <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${config.class}`}>
-                <IconComponent className="w-3 h-3 mr-1" />
-                {status}
+            <span className={`badge-modern ${config.class}`}>
+                <IconComponent size={12} />
+                {status.replace('_', ' ')}
             </span>
         )
     }
 
-    const handleStatusChange = (requestId, newStatus) => {
-        setRequests(requests.map(req => 
-            req.id === requestId ? { ...req, status: newStatus } : req
-        ))
-    }
+    const filteredRequests = requests.filter(request => {
+        const matchesFilter = filter === 'all' || request.status.toLowerCase() === filter.toLowerCase().replace('_', '_')
+        const matchesSearch = request.requestID?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                             request.machineID?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                             request.requestType?.toLowerCase().includes(searchTerm.toLowerCase())
+        return matchesFilter && matchesSearch
+    })
+
+    useEffect(() => {
+        fetchRequests()
+    }, [filter])
 
     return (
         <div>
-            <div className="mb-8">
-                <h1 className="text-3xl font-bold text-gray-900 flex items-center">
-                    <MessageSquare className="h-8 w-8 mr-3 text-blue-600" />
+            {/* Page Header */}
+            <div className="page-header">
+                <h1 className="page-title">
+                    <MessageSquare className="page-title-icon" />
                     Manage Requests
                 </h1>
-                <p className="mt-2 text-gray-600">
-                    Review and process customer equipment requests
+                <p className="page-subtitle">
+                    Review and manage customer service requests
                 </p>
             </div>
 
-            {/* Filter Section */}
-            <div className="bg-white rounded-lg shadow p-6 mb-6">
-                <div className="flex items-center space-x-4">
-                    <Filter className="h-5 w-5 text-gray-400" />
-                    <select
-                        value={filter}
-                        onChange={(e) => setFilter(e.target.value)}
-                        className="form-input"
-                    >
-                        <option value="all">All Requests</option>
-                        <option value="In-Progress">In Progress</option>
-                        <option value="Approved">Approved</option>
-                        <option value="Denied">Denied</option>
-                    </select>
+            {/* Error Alert */}
+            {error && (
+                <div className="alert-modern alert-error-modern">
+                    <AlertTriangle className="alert-icon" />
+                    <div className="alert-content">
+                        <div className="alert-message">{error}</div>
+                        <button onClick={fetchRequests} className="alert-action">
+                            Try again
+                        </button>
+                    </div>
+                </div>
+            )}
+
+            {/* Filters */}
+            <div className="card-filters">
+                <div className="filters-row">
+                    <div className="filters-left">
+                        <div className="search-input-wrapper">
+                            <Search className="search-icon" />
+                            <input
+                                type="text"
+                                placeholder="Search requests..."
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                                className="search-input"
+                            />
+                        </div>
+                        <div className="filter-select-wrapper">
+                            <Filter className="filter-icon" />
+                            <select
+                                value={filter}
+                                onChange={(e) => setFilter(e.target.value)}
+                                className="filter-select"
+                            >
+                                <option value="all">All Status</option>
+                                <option value="IN_PROGRESS">In Progress</option>
+                                <option value="COMPLETED">Completed</option>
+                                <option value="CANCELLED">Cancelled</option>
+                                <option value="PENDING">Pending</option>
+                            </select>
+                            <ChevronDown className="select-arrow" />
+                        </div>
+                    </div>
+                    <div className="filters-right">
+                        <button
+                            onClick={fetchRequests}
+                            className="btn-modern btn-secondary-modern"
+                            disabled={loading}
+                        >
+                            <RefreshCw size={16} />
+                            Refresh
+                        </button>
+                    </div>
                 </div>
             </div>
 
             {/* Requests Table */}
-            <div className="bg-white rounded-lg shadow overflow-hidden">
+            <div className="modern-card">
                 {loading ? (
-                    <div className="flex items-center justify-center py-12">
-                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                    <div className="loading-container">
+                        <div className="loading-spinner"></div>
+                    </div>
+                ) : filteredRequests.length === 0 ? (
+                    <div className="empty-state">
+                        <MessageSquare className="empty-state-icon" />
+                        <h3 className="empty-state-title">No requests found</h3>
+                        <p className="empty-state-description">
+                            {requests.length === 0 
+                                ? 'No service requests have been submitted yet.' 
+                                : 'No requests match your current filters.'}
+                        </p>
                     </div>
                 ) : (
-                    <div className="overflow-x-auto">
-                        <table className="min-w-full divide-y divide-gray-200">
-                            <thead className="bg-gray-50">
+                    <div className="modern-table-container">
+                        <table className="modern-table">
+                            <thead>
                                 <tr>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                        Request ID
-                                    </th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                        Customer
-                                    </th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                        Machine Type
-                                    </th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                        Status
-                                    </th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                        Date
-                                    </th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                        Actions
-                                    </th>
+                                    <th>Request ID</th>
+                                    <th>Machine ID</th>
+                                    <th>Request Type</th>
+                                    <th>Status</th>
+                                    <th>Request Date</th>
+                                    <th>Actions</th>
                                 </tr>
                             </thead>
-                            <tbody className="bg-white divide-y divide-gray-200">
-                                {requests.map((request) => (
-                                    <tr key={request.id} className="hover:bg-gray-50">
-                                        <td className="px-6 py-4 whitespace-nowrap font-medium text-gray-900">
-                                            {request.id}
+                            <tbody>
+                                {filteredRequests.map((request) => (
+                                    <tr key={request.requestID}>
+                                        <td>
+                                            <strong>{request.requestID}</strong>
                                         </td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-gray-500">
-                                            {request.customerId}
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-gray-500">
-                                            {request.machineType}
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap">
-                                            {getStatusBadge(request.status)}
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-gray-500">
-                                            {request.requestDate}
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm space-x-2">
-                                            {request.status === 'In-Progress' && (
-                                                <>
-                                                    <button 
-                                                        onClick={() => handleStatusChange(request.id, 'Approved')}
-                                                        className="text-green-600 hover:text-green-900"
-                                                    >
-                                                        Approve
-                                                    </button>
-                                                    <button 
-                                                        onClick={() => handleStatusChange(request.id, 'Denied')}
-                                                        className="text-red-600 hover:text-red-900"
-                                                    >
-                                                        Deny
-                                                    </button>
-                                                </>
-                                            )}
-                                            <button className="text-blue-600 hover:text-blue-900">
-                                                View Details
-                                            </button>
+                                        <td>{request.machineID}</td>
+                                        <td>{request.requestType}</td>
+                                        <td>{getRequestStatusBadge(request.status)}</td>
+                                        <td>{new Date(request.requestDate).toLocaleDateString()}</td>
+                                        <td>
+                                            <div className="action-buttons">
+                                                <button 
+                                                    onClick={() => handleStatusChange(request.requestID, request.status)}
+                                                    className="action-btn action-btn-edit"
+                                                    title="Update Status"
+                                                >
+                                                    <Edit size={14} />
+                                                </button>
+                                            </div>
                                         </td>
                                     </tr>
                                 ))}
