@@ -1,40 +1,32 @@
-import { Inter } from 'next/font/google'
-import Providers from '@/components/Providers'
+'use client'
+
+import { SessionProvider } from 'next-auth/react'
+import { Toaster } from 'react-hot-toast'
 import './globals.css'
-
-const inter = Inter({ subsets: ['latin'] })
-
-export const metadata = {
-  title: 'CatRental - Caterpillar Equipment Rental Management',
-  description: 'Streamline your Caterpillar equipment rentals with real-time tracking, intelligent scheduling, and powerful fleet management analytics',
-  keywords: 'caterpillar, equipment rental, fleet management, construction equipment, heavy machinery',
-  authors: [{ name: 'CatRental Team' }],
-  robots: 'index, follow',
-  openGraph: {
-    title: 'CatRental - Caterpillar Equipment Rental Management',
-    description: 'Professional fleet management for Caterpillar equipment rentals',
-    type: 'website',
-    locale: 'en_US',
-  },
-}
-
-export const viewport = {
-  width: 'device-width',
-  initialScale: 1,
-  themeColor: '#FFCD11',
-}
 
 export default function RootLayout({ children }) {
   return (
     <html lang="en">
-      <head>
-        <link rel="icon" href="/favicon.ico" />
-        <link rel="apple-touch-icon" href="/caterpillar-logo.png" />
-      </head>
-      <body className={inter.className}>
-        <Providers>
+      <body>
+        <SessionProvider>
           {children}
-        </Providers>
+          <Toaster
+            position="top-right"
+            toastOptions={{
+              duration: 4000,
+              style: {
+                background: '#363636',
+                color: '#fff',
+              },
+              success: {
+                duration: 3000,
+                theme: {
+                  primary: '#4aed88',
+                },
+              },
+            }}
+          />
+        </SessionProvider>
       </body>
     </html>
   )

@@ -1,6 +1,7 @@
+'use client'
 import { useState, useEffect } from 'react'
 import { useSession, getSession } from 'next-auth/react'
-import { useRouter } from 'next/router'
+import { useRouter } from 'next/navigation' 
 import Head from 'next/head'
 import Layout from '@/components/Layout'
 
@@ -262,21 +263,4 @@ export default function AdminDashboard() {
             </Layout>
         </>
     )
-}
-
-export async function getServerSideProps(context) {
-    const session = await getSession(context)
-
-    if (!session || session.user.role !== 'admin') {
-        return {
-            redirect: {
-                destination: '/auth/signin',
-                permanent: false,
-            },
-        }
-    }
-
-    return {
-        props: { session },
-    }
 }

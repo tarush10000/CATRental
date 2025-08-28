@@ -1,7 +1,8 @@
+'use client'
+
 import { useState, useEffect } from 'react'
-import { useSession, getSession } from 'next-auth/react'
-import { useRouter } from 'next/router'
-import Head from 'next/head'
+import { useSession } from 'next-auth/react'
+import { useRouter } from 'next/navigation'
 import Layout from '@/components/Layout'
 import {
     Truck, Plus, FileText, MessageSquare, Settings,
@@ -30,7 +31,7 @@ export default function AdminDashboard() {
         }
 
         fetchDashboardData()
-    }, [session, status])
+    }, [session, status, router])
 
     const fetchDashboardData = async () => {
         try {
@@ -71,7 +72,6 @@ export default function AdminDashboard() {
                 const requestsData = await requestsResponse.json()
                 setRecentRequests(requestsData.data || [])
             }
-
         } catch (error) {
             console.error('Error fetching dashboard data:', error)
         } finally {
@@ -79,249 +79,134 @@ export default function AdminDashboard() {
         }
     }
 
-    const getStatusBadge = (status) => {
-        const badgeClass = {
-            'Ready': 'badge-ready',
-            'Occupied': 'badge-occupied',
-            'Maintenance': 'badge-maintenance',
-            'In-transit': 'badge-in-transit'
-        }[status] || 'badge-pending'
-
-        return <span className={`badge ${badgeClass}`}>{status}</span>
-    }
-
-    const getRequestStatusBadge = (status) => {
-        const badgeClass = {
-            'Approved': 'badge-approved',
-            'In-Progress': 'badge-pending',
-            'Denied': 'badge-denied'
-        }[status] || 'badge-pending'
-
-        return <span className={`badge ${badgeClass}`}>{status}</span>
-    }
-
-    if (status === 'loading' || loading) {
+    // Show loading state while session is being fetched
+    if (status === 'loading') {
         return (
             <Layout>
                 <div className="flex items-center justify-center min-h-screen">
-                    <div className="text-center">
-                        <div className="spinner mb-4"></div>
-                        <p>Loading dashboard...</p>
-                    </div>
+                    <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
                 </div>
             </Layout>
         )
     }
 
-    return (
-        <>
-            <Head>
-                <title>Admin Dashboard - CatRental</title>
-            </Head>
+    // If no session or not admin, this will be handled by the useEffect redirect
+    if (!session || session.user.role !== 'admin') {
+        return null
+    }
 
-            <Layout>
-                <div className="space-y-6">
-                    {/* Welcome Header */}
-                    <div>
-                        <h1 className="text-2xl font-bold text-cat-dark-gray">
-                            Welcome back, {session?.user?.name}
+    return (
+        <Layout>
+            <div className="min-h-screen bg-gray-50 py-8">
+                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                    {/* Header */}
+                    <div className="mb-8">
+                        <h1 className="text-3xl font-bold text-gray-900">
+                            Admin Dashboard
                         </h1>
-                        <p className="text-cat-medium-gray">
-                            {session?.user?.dealership_name} - Admin Dashboard
+                        <p className="mt-2 text-gray-600">
+                            Welcome back, {session.user.name}! Here's an overview of your rental operations.
                         </p>
                     </div>
 
-                    {/* Statistics Cards */}
-                    <div className="dashboard-grid">
-                        <div className="stat-card">
-                            <div className="flex items-center justify-between">
-                                <div>
-                                    <div className="stat-number text-cat-yellow">
-                                        {stats.total_machines}
+                    {loading ? (
+                        <div className="flex items-center justify-center py-12">
+                            <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600"></div>
+                        </div>
+                    ) : (
+                        <>
+                            {/* Stats Grid */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                                <div className="bg-white rounded-lg shadow p-6">
+                                    <div className="flex items-center justify-between">
+                                        <div>
+                                            <p className="text-sm font-medium text-gray-600">Total Machines</p>
+                                            <p className="text-2xl font-bold text-gray-900">{stats.total_machines}</p>
+                                        </div>
+                                        <div className="p-3 bg-blue-100 rounded-full">
+                                            <Truck className="h-6 w-6 text-blue-600" />
+                                        </div>
                                     </div>
-                                    <div className="stat-label">Total Machines</div>
                                 </div>
-                                <div className="h-12 w-12 bg-cat-yellow rounded-full flex items-center justify-center">
-                                    <Truck className="h-6 w-6 text-cat-black" />
-                                </div>
-                            </div>
-                        </div>
 
-                        <div className="stat-card">
-                            <div className="flex items-center justify-between">
-                                <div>
-                                    <div className="stat-number" style={{ color: 'var(--success-green)' }}>
-                                        {stats.active_machines}
+                                <div className="bg-white rounded-lg shadow p-6">
+                                    <div className="flex items-center justify-between">
+                                        <div>
+                                            <p className="text-sm font-medium text-gray-600">Active Machines</p>
+                                            <p className="text-2xl font-bold text-green-600">{stats.active_machines}</p>
+                                        </div>
+                                        <div className="p-3 bg-green-100 rounded-full">
+                                            <Activity className="h-6 w-6 text-green-600" />
+                                        </div>
                                     </div>
-                                    <div className="stat-label">Active Machines</div>
                                 </div>
-                                <div className="h-12 w-12 bg-success-green rounded-full flex items-center justify-center">
-                                    <Activity className="h-6 w-6 text-white" />
-                                </div>
-                            </div>
-                        </div>
 
-                        <div className="stat-card">
-                            <div className="flex items-center justify-between">
-                                <div>
-                                    <div className="stat-number" style={{ color: 'var(--warning-orange)' }}>
-                                        {stats.maintenance_machines}
+                                <div className="bg-white rounded-lg shadow p-6">
+                                    <div className="flex items-center justify-between">
+                                        <div>
+                                            <p className="text-sm font-medium text-gray-600">In Maintenance</p>
+                                            <p className="text-2xl font-bold text-yellow-600">{stats.maintenance_machines}</p>
+                                        </div>
+                                        <div className="p-3 bg-yellow-100 rounded-full">
+                                            <Wrench className="h-6 w-6 text-yellow-600" />
+                                        </div>
                                     </div>
-                                    <div className="stat-label">Under Maintenance</div>
                                 </div>
-                                <div className="h-12 w-12 bg-warning-orange rounded-full flex items-center justify-center">
-                                    <Wrench className="h-6 w-6 text-white" />
-                                </div>
-                            </div>
-                        </div>
 
-                        <div className="stat-card">
-                            <div className="flex items-center justify-between">
-                                <div>
-                                    <div className="stat-number" style={{ color: 'var(--info-blue)' }}>
-                                        {stats.pending_requests}
+                                <div className="bg-white rounded-lg shadow p-6">
+                                    <div className="flex items-center justify-between">
+                                        <div>
+                                            <p className="text-sm font-medium text-gray-600">Pending Requests</p>
+                                            <p className="text-2xl font-bold text-orange-600">{stats.pending_requests}</p>
+                                        </div>
+                                        <div className="p-3 bg-orange-100 rounded-full">
+                                            <Clock className="h-6 w-6 text-orange-600" />
+                                        </div>
                                     </div>
-                                    <div className="stat-label">Pending Requests</div>
-                                </div>
-                                <div className="h-12 w-12 bg-info-blue rounded-full flex items-center justify-center">
-                                    <Clock className="h-6 w-6 text-white" />
                                 </div>
                             </div>
-                        </div>
-                    </div>
 
-                    {/* Recent Machines and Requests */}
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                        {/* Recent Machines */}
-                        <div className="card">
-                            <div className="card-header">
-                                <h3 className="card-title flex items-center">
-                                    <Truck className="h-5 w-5 mr-2" />
-                                    Recent Machines
-                                </h3>
+                            {/* Quick Actions */}
+                            <div className="bg-white rounded-lg shadow mb-8 p-6">
+                                <h2 className="text-xl font-semibold text-gray-900 mb-4">Quick Actions</h2>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                                    <button
+                                        onClick={() => router.push('/admin/add-machine')}
+                                        className="btn-primary flex items-center justify-center"
+                                    >
+                                        <Plus className="h-5 w-5 mr-2" />
+                                        Add Machine
+                                    </button>
+
+                                    <button
+                                        onClick={() => router.push('/admin/add-order')}
+                                        className="btn-secondary flex items-center justify-center"
+                                    >
+                                        <FileText className="h-5 w-5 mr-2" />
+                                        Create Order
+                                    </button>
+
+                                    <button
+                                        onClick={() => router.push('/admin/requests')}
+                                        className="btn-secondary flex items-center justify-center"
+                                    >
+                                        <MessageSquare className="h-5 w-5 mr-2" />
+                                        Manage Requests
+                                    </button>
+
+                                    <button
+                                        onClick={() => router.push('/admin/machines')}
+                                        className="btn-secondary flex items-center justify-center"
+                                    >
+                                        <Settings className="h-5 w-5 mr-2" />
+                                        View All Machines
+                                    </button>
+                                </div>
                             </div>
-                            <div className="card-body">
-                                {recentMachines.length > 0 ? (
-                                    <div className="space-y-4">
-                                        {recentMachines.map((machine) => (
-                                            <div key={machine.machine_id} className="flex items-center justify-between p-3 bg-cat-light-gray rounded">
-                                                <div>
-                                                    <div className="font-medium">{machine.machine_id}</div>
-                                                    <div className="text-sm text-cat-medium-gray">{machine.machine_type}</div>
-                                                </div>
-                                                <div className="text-right">
-                                                    {getStatusBadge(machine.status)}
-                                                    <div className="text-sm text-cat-medium-gray mt-1">
-                                                        {machine.location}
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                ) : (
-                                    <p className="text-cat-medium-gray text-center py-4">No recent machines</p>
-                                )}
-                            </div>
-                        </div>
-
-                        {/* Recent Requests */}
-                        <div className="card">
-                            <div className="card-header">
-                                <h3 className="card-title flex items-center">
-                                    <MessageSquare className="h-5 w-5 mr-2" />
-                                    Recent Requests
-                                </h3>
-                            </div>
-                            <div className="card-body">
-                                {recentRequests.length > 0 ? (
-                                    <div className="space-y-4">
-                                        {recentRequests.map((request) => (
-                                            <div key={request.request_id} className="flex items-center justify-between p-3 bg-cat-light-gray rounded">
-                                                <div>
-                                                    <div className="font-medium">{request.request_type}</div>
-                                                    <div className="text-sm text-cat-medium-gray">
-                                                        Machine: {request.machine_id}
-                                                    </div>
-                                                </div>
-                                                <div className="text-right">
-                                                    {getRequestStatusBadge(request.status)}
-                                                    <div className="text-sm text-cat-medium-gray mt-1">
-                                                        {new Date(request.request_date).toLocaleDateString()}
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                ) : (
-                                    <p className="text-cat-medium-gray text-center py-4">No recent requests</p>
-                                )}
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Quick Actions */}
-                    <div className="card">
-                        <div className="card-header">
-                            <h3 className="card-title flex items-center">
-                                <TrendingUp className="h-5 w-5 mr-2" />
-                                Quick Actions
-                            </h3>
-                        </div>
-                        <div className="card-body">
-                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                                <button
-                                    onClick={() => router.push('/admin/add-machine')}
-                                    className="btn-primary flex items-center justify-center"
-                                >
-                                    <Plus className="h-5 w-5 mr-2" />
-                                    Add New Machine
-                                </button>
-
-                                <button
-                                    onClick={() => router.push('/admin/add-order')}
-                                    className="btn-secondary flex items-center justify-center"
-                                >
-                                    <FileText className="h-5 w-5 mr-2" />
-                                    Create Order
-                                </button>
-
-                                <button
-                                    onClick={() => router.push('/admin/requests')}
-                                    className="btn-secondary flex items-center justify-center"
-                                >
-                                    <MessageSquare className="h-5 w-5 mr-2" />
-                                    Manage Requests
-                                </button>
-
-                                <button
-                                    onClick={() => router.push('/admin/machines')}
-                                    className="btn-secondary flex items-center justify-center"
-                                >
-                                    <Settings className="h-5 w-5 mr-2" />
-                                    View All Machines
-                                </button>
-                            </div>
-                        </div>
-                    </div>
+                        </>
+                    )}
                 </div>
-            </Layout>
-        </>
+            </div>
+        </Layout>
     )
-}
-
-export async function getServerSideProps(context) {
-    const session = await getSession(context)
-
-    if (!session || session.user.role !== 'admin') {
-        return {
-            redirect: {
-                destination: '/auth/signin',
-                permanent: false,
-            },
-        }
-    }
-
-    return {
-        props: { session },
-    }
 }
