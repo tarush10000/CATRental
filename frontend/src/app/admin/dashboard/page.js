@@ -9,7 +9,7 @@ import {
     Truck, Plus, FileText, MessageSquare, Settings,
     TrendingUp, Wrench, Activity, Clock, CheckCircle,
     AlertTriangle, Bell, Users, BarChart3,
-    RefreshCw, ArrowUp, ArrowDown, Eye, IndianRupee
+    RefreshCw, ArrowUp, ArrowDown, Eye, IndianRupee, X
 } from 'lucide-react'
 
 export default function AdminDashboard() {
@@ -53,14 +53,19 @@ export default function AdminDashboard() {
                 },
             })
 
-            if (dashboardResponse.ok) {
-                const dashboardData = await dashboardResponse.json()
-                if (dashboardData.success) {
-                    setStats(dashboardData.data)
-                }
+            if (!dashboardResponse.ok) {
+                throw new Error('Failed to fetch dashboard data')
             }
 
-            // Fetch recent machines (this endpoint remains the same)
+            const dashboardData = await dashboardResponse.json()
+            
+            if (dashboardData.success) {
+                setStats(dashboardData.data)
+            } else {
+                console.error('Dashboard API returned error:', dashboardData.message)
+            }
+
+            // Fetch recent machines
             const machinesResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/admin/machines/recent`, {
                 headers: {
                     'Authorization': `Bearer ${session.accessToken}`,
@@ -87,22 +92,51 @@ export default function AdminDashboard() {
     }
 
     const getStatusBadge = (status) => {
-        const statusConfig = {
-            'Ready': { class: 'badge-ready-modern', icon: CheckCircle },
-            'Occupied': { class: 'badge-occupied-modern', icon: Activity },
-            'Maintenance': { class: 'badge-maintenance-modern', icon: Wrench },
-            'In-transit': { class: 'badge-in-transit-modern', icon: Truck }
+        const statusClasses = {
+            'Ready': 'badge-success',
+            'Occupied': 'badge-primary',
+            'In-transit': 'badge-warning',
+            'Maintenance': 'badge-danger'
         }
-
-        const config = statusConfig[status] || { class: 'badge-pending-modern', icon: Clock }
-        const IconComponent = config.icon
-
+        
         return (
-            <span className={`badge-modern ${config.class}`}>
-                <IconComponent size={12} />
+            <span className={`status-badge ${statusClasses[status] || 'badge-secondary'}`}>
                 {status}
             </span>
         )
+    }
+
+    const getNotificationIcon = (type) => {
+        switch (type) {
+            case 'maintenance':
+                return <Wrench size={16} />
+            case 'request':
+                return <MessageSquare size={16} />
+            default:
+                return <AlertTriangle size={16} />
+        }
+    }
+
+    const getPriorityClass = (priority) => {
+        switch (priority) {
+            case 'high':
+                return 'notification-high'
+            case 'medium':
+                return 'notification-medium'
+            case 'low':
+                return 'notification-low'
+            default:
+                return 'notification-medium'
+        }
+    }
+
+    const formatDate = (dateString) => {
+        if (!dateString) return 'N/A'
+        try {
+            return new Date(dateString).toLocaleDateString()
+        } catch {
+            return 'N/A'
+        }
     }
 
     if (status === 'loading' || loading) {
@@ -142,76 +176,81 @@ export default function AdminDashboard() {
                                     disabled={refreshing}
                                     className="btn-modern btn-secondary-modern"
                                 >
-                                    <RefreshCw size={16} className={refreshing ? 'animate-spin' : ''} />
-                                    Refresh
+                                    <RefreshCw size={16} className={refreshing ? 'spin' : ''} />
+                                    {refreshing ? 'Refreshing...' : 'Refresh'}
+                                </button>
+                                <button 
+                                    onClick={() => router.push('/admin/add-machine')}
+                                    className="btn-modern btn-primary-modern"
+                                >
+                                    <Plus size={16} />
+                                    Add Machine
                                 </button>
                             </div>
                         </div>
                     </div>
 
-                    {/* Statistics Cards */}
-                    <div className="stats-grid">
-                        <div className="stat-card-modern stat-primary">
-                            <div className="stat-icon">
+                    {/* Stats Overview */}
+                    <div className="dashboard-grid">
+                        <div className="dashboard-card stats-card">
+                            <div className="stats-icon stats-primary">
                                 <Truck size={24} />
                             </div>
-                            <div className="stat-content">
-                                <div className="stat-value">{stats.total_machines}</div>
-                                <div className="stat-label">Total Machines</div>
-                                <div className="stat-trend positive">
+                            <div className="stats-content">
+                                <h3 className="stats-number">{stats.total_machines}</h3>
+                                <p className="stats-label">Total Machines</p>
+                                <div className="stats-trend positive">
                                     <ArrowUp size={12} />
-                                    <span>+2 this week</span>
+                                    <span>+5% from last month</span>
                                 </div>
                             </div>
                         </div>
 
-                        <div className="stat-card-modern stat-success">
-                            <div className="stat-icon">
+                        <div className="dashboard-card stats-card">
+                            <div className="stats-icon stats-success">
                                 <Activity size={24} />
                             </div>
-                            <div className="stat-content">
-                                <div className="stat-value">{stats.active_orders}</div>
-                                <div className="stat-label">Active Orders</div>
-                                <div className="stat-trend positive">
+                            <div className="stats-content">
+                                <h3 className="stats-number">{stats.active_orders}</h3>
+                                <p className="stats-label">Active Orders</p>
+                                <div className="stats-trend positive">
                                     <ArrowUp size={12} />
-                                    <span>+12% from last month</span>
+                                    <span>+12% this week</span>
                                 </div>
                             </div>
                         </div>
 
-                        <div className="stat-card-modern stat-info">
-                            <div className="stat-icon">
+                        <div className="dashboard-card stats-card">
+                            <div className="stats-icon stats-warning">
                                 <IndianRupee size={24} />
                             </div>
-                            <div className="stat-content">
-                                <div className="stat-value">₹{stats.revenue.toFixed(2)}</div>
-                                <div className="stat-label">Revenue (30d)</div>
-                                <div className="stat-trend positive">
+                            <div className="stats-content">
+                                <h3 className="stats-number">₹{stats.revenue?.toLocaleString() || 0}</h3>
+                                <p className="stats-label">Monthly Revenue</p>
+                                <div className="stats-trend positive">
                                     <ArrowUp size={12} />
-                                    <span>+8.2% from last month</span>
+                                    <span>+8% from last month</span>
                                 </div>
                             </div>
                         </div>
 
-                        <div className="stat-card-modern stat-warning">
-                            <div className="stat-icon">
+                        <div className="dashboard-card stats-card">
+                            <div className="stats-icon stats-info">
                                 <Bell size={24} />
                             </div>
-                            <div className="stat-content">
-                                <div className="stat-value">{stats.notifications.length}</div>
-                                <div className="stat-label">Active Alerts</div>
-                                {stats.notifications.length > 0 && (
-                                    <div className="stat-trend negative">
-                                        <AlertTriangle size={12} />
-                                        <span>Needs attention</span>
-                                    </div>
-                                )}
+                            <div className="stats-content">
+                                <h3 className="stats-number">{stats.notifications?.length || 0}</h3>
+                                <p className="stats-label">Notifications</p>
+                                <div className="stats-trend neutral">
+                                    <Clock size={12} />
+                                    <span>Requires attention</span>
+                                </div>
                             </div>
                         </div>
                     </div>
 
                     {/* Main Content Grid */}
-                    <div className="dashboard-grid">
+                    <div className="dashboard-content-grid">
                         {/* Recent Machines */}
                         <div className="dashboard-card">
                             <div className="card-header-modern">
@@ -227,20 +266,23 @@ export default function AdminDashboard() {
                             <div className="card-content">
                                 {recentMachines.length > 0 ? (
                                     <div className="machine-list">
-                                        {recentMachines.map((machine) => (
-                                            <div key={machine._id} className="machine-item">
-                                                <div className="machine-icon">
-                                                    <Truck size={20} />
+                                        {recentMachines.slice(0, 5).map((machine, index) => (
+                                            <div key={machine._id || index} className="machine-item">
+                                                <div className="machine-info">
+                                                    <h4 className="machine-name">
+                                                        {machine.machineType || 'Unknown Type'}
+                                                    </h4>
+                                                    <p className="machine-id">
+                                                        ID: {machine.machineID || 'N/A'}
+                                                    </p>
+                                                    <p className="machine-location">
+                                                        📍 {machine.location || 'Unknown Location'}
+                                                    </p>
                                                 </div>
-                                                <div className="machine-details">
-                                                    <div className="machine-id">{machine.machineID}</div>
-                                                    <div className="machine-type">{machine.machineType}</div>
-                                                    <div className="machine-location">{machine.location || 'No location specified'}</div>
-                                                </div>
-                                                <div className="machine-status">
+                                                <div className="machine-meta">
                                                     {getStatusBadge(machine.status)}
                                                     <div className="machine-updated">
-                                                        {new Date(machine.updatedAt).toLocaleDateString()}
+                                                        {formatDate(machine.updatedAt)}
                                                     </div>
                                                 </div>
                                             </div>
@@ -266,22 +308,30 @@ export default function AdminDashboard() {
                         <div className="dashboard-card">
                             <div className="card-header-modern">
                                 <h3 className="card-title-modern">System Notifications</h3>
-                                {stats.notifications.length > 0 && (
+                                {stats.notifications && stats.notifications.length > 0 && (
                                     <span className="notification-count">
                                         {stats.notifications.length} active
                                     </span>
                                 )}
                             </div>
                             <div className="card-content">
-                                {stats.notifications.length > 0 ? (
+                                {stats.notifications && stats.notifications.length > 0 ? (
                                     <div className="notification-list">
-                                        {stats.notifications.map((notification, index) => (
-                                            <div key={index} className="notification-item">
+                                        {stats.notifications.slice(0, 5).map((notification, index) => (
+                                            <div key={index} className={`notification-item ${getPriorityClass(notification.priority)}`}>
                                                 <div className="notification-icon">
-                                                    <AlertTriangle size={16} />
+                                                    {getNotificationIcon(notification.type)}
                                                 </div>
                                                 <div className="notification-content">
-                                                    <p className="notification-text">{notification}</p>
+                                                    <h5 className="notification-title">
+                                                        {notification.title || 'Notification'}
+                                                    </h5>
+                                                    <p className="notification-text">
+                                                        {notification.message || 'No message available'}
+                                                    </p>
+                                                    <span className="notification-time">
+                                                        {formatDate(notification.timestamp)}
+                                                    </span>
                                                 </div>
                                                 <button className="notification-dismiss">
                                                     <X size={14} />
@@ -307,101 +357,49 @@ export default function AdminDashboard() {
                             </div>
                             <div className="card-content">
                                 <div className="quick-actions-grid">
-                                    <button
+                                    <button 
                                         onClick={() => router.push('/admin/add-machine')}
-                                        className="quick-action-btn primary"
+                                        className="quick-action-card"
                                     >
                                         <div className="action-icon">
-                                            <Plus size={20} />
+                                            <Plus size={24} />
                                         </div>
-                                        <div className="action-content">
-                                            <h4 className="action-title">Add New Machine</h4>
-                                            <p className="action-description">Register new equipment to your fleet</p>
-                                        </div>
+                                        <h4 className="action-title">Add New Machine</h4>
+                                        <p className="action-description">Register a new machine in the system</p>
                                     </button>
 
-                                    <button
+                                    <button 
                                         onClick={() => router.push('/admin/add-order')}
-                                        className="quick-action-btn secondary"
+                                        className="quick-action-card"
                                     >
                                         <div className="action-icon">
-                                            <FileText size={20} />
+                                            <FileText size={24} />
                                         </div>
-                                        <div className="action-content">
-                                            <h4 className="action-title">Assign Machine</h4>
-                                            <p className="action-description">Assign equipment to customers</p>
-                                        </div>
+                                        <h4 className="action-title">Assign Machine</h4>
+                                        <p className="action-description">Create new machine assignment</p>
                                     </button>
 
-                                    <button
+                                    <button 
                                         onClick={() => router.push('/admin/requests')}
-                                        className="quick-action-btn info"
+                                        className="quick-action-card"
                                     >
                                         <div className="action-icon">
-                                            <MessageSquare size={20} />
+                                            <MessageSquare size={24} />
                                         </div>
-                                        <div className="action-content">
-                                            <h4 className="action-title">Manage Requests</h4>
-                                            <p className="action-description">Handle customer service requests</p>
-                                        </div>
+                                        <h4 className="action-title">Manage Requests</h4>
+                                        <p className="action-description">Review and process customer requests</p>
                                     </button>
 
-                                    <button
+                                    <button 
                                         onClick={() => router.push('/admin/machines')}
-                                        className="quick-action-btn success"
+                                        className="quick-action-card"
                                     >
                                         <div className="action-icon">
-                                            <Settings size={20} />
+                                            <Truck size={24} />
                                         </div>
-                                        <div className="action-content">
-                                            <h4 className="action-title">View All Machines</h4>
-                                            <p className="action-description">Complete fleet overview and management</p>
-                                        </div>
+                                        <h4 className="action-title">View All Machines</h4>
+                                        <p className="action-description">Browse complete machine inventory</p>
                                     </button>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Performance Overview */}
-                        <div className="dashboard-card full-width">
-                            <div className="card-header-modern">
-                                <h3 className="card-title-modern">Performance Overview</h3>
-                                <div className="card-actions">
-                                    <select className="period-select">
-                                        <option value="7d">Last 7 days</option>
-                                        <option value="30d" selected>Last 30 days</option>
-                                        <option value="90d">Last 3 months</option>
-                                    </select>
-                                </div>
-                            </div>
-                            <div className="card-content">
-                                <div className="performance-metrics">
-                                    <div className="metric-item">
-                                        <div className="metric-label">Machine Utilization</div>
-                                        <div className="metric-value">78.5%</div>
-                                        <div className="metric-progress">
-                                            <div className="progress-bar">
-                                                <div className="progress-fill" style={{ width: '78.5%' }}></div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    
-                                    <div className="metric-item">
-                                        <div className="metric-label">Average Order Duration</div>
-                                        <div className="metric-value">12.3 days</div>
-                                        <div className="metric-change positive">
-                                            <ArrowUp size={12} />
-                                            2.1 days from last month
-                                        </div>
-                                    </div>
-
-                                    <div className="metric-item">
-                                        <div className="metric-label">Customer Satisfaction</div>
-                                        <div className="metric-value">4.7/5.0</div>
-                                        <div className="metric-stars">
-                                            ★★★★★
-                                        </div>
-                                    </div>
                                 </div>
                             </div>
                         </div>

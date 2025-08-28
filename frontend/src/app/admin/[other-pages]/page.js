@@ -1004,7 +1004,7 @@ function ManageRequests({ session }) {
         )
     }
 
-    const filteredRequests = requests.filter(request => {
+    const filteredRequests = (requests?.requests || []).filter(request => {
         const matchesFilter = filter === 'all' || request.status.toLowerCase() === filter.toLowerCase().replace('_', '_')
         const matchesSearch = request.requestID?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                              request.machineID?.toLowerCase().includes(searchTerm.toLowerCase()) ||
