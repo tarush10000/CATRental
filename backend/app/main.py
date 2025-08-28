@@ -5,7 +5,7 @@ import os
 from decouple import config
 
 # Import routers
-from .routers import auth, machines, requests, admin, customer
+from .routers import auth, machines, requests, admin, customer, recommendations
 
 # Create FastAPI instance
 app = FastAPI(
@@ -29,6 +29,7 @@ app.include_router(machines.router, prefix="/api/machines", tags=["Machines"])
 app.include_router(requests.router, prefix="/api/requests", tags=["Requests"])
 app.include_router(admin.router, prefix="/api/admin", tags=["Admin"])
 app.include_router(customer.router, prefix="/api/customer", tags=["Customer"])
+app.include_router(recommendations.router, prefix="/api/recommendations", tags=["Recommendations"])
 
 # Create uploads directory if it doesn't exist
 uploads_dir = "uploads"

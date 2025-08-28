@@ -1,24 +1,27 @@
 'use client'
 
-import {
-    BarChart3,
-    Bell,
-    ChevronDown,
-    FileText,
-    Lightbulb,
-    LogOut,
-    Menu,
-    MessageSquare,
-    Plus,
-    Search,
-    Settings,
-    Truck,
-    User
-} from 'lucide-react';
 import { signOut, useSession } from 'next-auth/react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useState, useEffect } from 'react';
+import MapPanel from './MapPanel';
+import { 
+    BarChart3, 
+    Truck, 
+    FileText, 
+    MessageSquare, 
+    Settings, 
+    User, 
+    Plus,
+    Lightbulb,
+    Menu,
+    LogOut,
+    Bell,
+    ChevronDown,
+    Brain,
+    MapPin,
+    Map
+} from 'lucide-react';
 
 const Layout = ({ children }) => {
     const { data: session } = useSession();
@@ -26,6 +29,7 @@ const Layout = ({ children }) => {
     const pathname = usePathname();
     const [sidebarOpen, setSidebarOpen] = useState(false);
     const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
+    const [mapPanelOpen, setMapPanelOpen] = useState(false);
 
     const isAdmin = session?.user?.role === 'admin';
     const isCustomer = session?.user?.role === 'customer';
@@ -34,22 +38,7 @@ const Layout = ({ children }) => {
         await signOut({ callbackUrl: '/auth/signin' });
     };
 
-    const adminNavItems = [
-        { name: 'Dashboard', href: '/admin/dashboard', icon: BarChart3 },
-        { name: 'All Machines', href: '/admin/machines', icon: Truck },
-        { name: 'Add Machine', href: '/admin/add-machine', icon: Plus },
-        { name: 'Assign Machine', href: '/admin/add-order', icon: FileText },
-        { name: 'Manage Requests', href: '/admin/requests', icon: MessageSquare },
-        { name: 'Settings', href: '/admin/settings', icon: Settings },
-    ];
-
-    const customerNavItems = [
-        { name: 'Dashboard', href: '/customer/dashboard', icon: BarChart3 },
-        { name: 'Create Request', href: '/customer/create-request', icon: FileText },
-        { name: 'My Machines', href: '/customer/machines', icon: Truck },
-        { name: 'Recommendations', href: '/customer/recommendations', icon: Lightbulb },
-    ];
-
+    // Add click outside handler for profile dropdown
     useEffect(() => {
         const handleClickOutside = (event) => {
             if (profileDropdownOpen && !event.target.closest('.user-menu')) {
@@ -60,6 +49,23 @@ const Layout = ({ children }) => {
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, [profileDropdownOpen]);
+
+    const adminNavItems = [
+        { name: 'Dashboard', href: '/admin/dashboard', icon: BarChart3 },
+        { name: 'All Machines', href: '/admin/machines', icon: Truck },
+        { name: 'Add Machine', href: '/admin/add-machine', icon: Plus },
+        { name: 'Assign Machine', href: '/admin/add-order', icon: FileText },
+        { name: 'Manage Requests', href: '/admin/requests', icon: MessageSquare },
+        { name: 'Smart Recommendations', href: '/admin/recommendations', icon: Brain },
+        { name: 'Settings', href: '/admin/settings', icon: Settings },
+    ];
+
+    const customerNavItems = [
+        { name: 'Dashboard', href: '/customer/dashboard', icon: BarChart3 },
+        { name: 'Create Request', href: '/customer/create-request', icon: FileText },
+        { name: 'My Machines', href: '/customer/machines', icon: Truck },
+        { name: 'Smart Recommendations', href: '/customer/recommendations', icon: Lightbulb },
+    ];
 
     const navItems = isAdmin ? adminNavItems : customerNavItems;
 
@@ -77,7 +83,7 @@ const Layout = ({ children }) => {
                         </div>
                     </div>
                 </div>
-
+                
                 {/* Navigation */}
                 <nav className="sidebar-nav">
                     <div className="nav-section">
@@ -138,7 +144,7 @@ const Layout = ({ children }) => {
                         >
                             <Menu size={20} />
                         </button>
-
+                        
                         {/* Breadcrumb */}
                         <div className="breadcrumb">
                             <span className="breadcrumb-item">
@@ -152,8 +158,18 @@ const Layout = ({ children }) => {
                     </div>
 
                     <div className="navbar-right">
+                        {/* Map Panel Button */}
+                        <button 
+                            className="map-panel-btn"
+                            onClick={() => setMapPanelOpen(true)}
+                            title="View Machine Locations"
+                        >
+                            <MapPin size={18} />
+                            <span className="map-btn-text">Map</span>
+                        </button>
+
                         {/* Notifications */}
-                        <button
+                        <button 
                             className="notification-btn"
                             onClick={() => {
                                 const notificationSection = document.getElementById('notifications-section');
@@ -164,12 +180,12 @@ const Layout = ({ children }) => {
                             title="View Notifications"
                         >
                             <Bell size={18} />
-                            <span className="notification-badge"></span>
+                            <span className="notification-badge">3</span>
                         </button>
 
                         {/* User Menu */}
                         <div className="user-menu">
-                            <button
+                            <button 
                                 className="user-menu-btn"
                                 onClick={() => setProfileDropdownOpen(!profileDropdownOpen)}
                             >
@@ -179,7 +195,7 @@ const Layout = ({ children }) => {
                                 <span className="user-name-navbar">{session?.user?.name || 'User'}</span>
                                 <ChevronDown size={14} />
                             </button>
-
+                            
                             {/* Profile Dropdown */}
                             {profileDropdownOpen && (
                                 <div className="user-menu-dropdown">
@@ -191,7 +207,11 @@ const Layout = ({ children }) => {
                                         <span className="user-role-text">{session?.user?.role}</span>
                                     </div>
                                     <div className="dropdown-divider"></div>
-                                    <button className="dropdown-item dropdown-button" onClick={() => {/* Add profile page navigation */ }}>
+                                    <button className="dropdown-item dropdown-button" onClick={() => {
+                                        setProfileDropdownOpen(false);
+                                        // Navigate to settings page
+                                        router.push(isAdmin ? '/admin/settings' : '/customer/settings');
+                                    }}>
                                         <Settings size={16} />
                                         <span>Settings</span>
                                     </button>
@@ -215,11 +235,14 @@ const Layout = ({ children }) => {
 
             {/* Mobile Overlay */}
             {sidebarOpen && (
-                <div
+                <div 
                     className="mobile-overlay"
                     onClick={() => setSidebarOpen(false)}
                 ></div>
             )}
+
+            {/* Map Panel */}
+            <MapPanel isOpen={mapPanelOpen} onClose={() => setMapPanelOpen(false)} />
         </div>
     );
 };
