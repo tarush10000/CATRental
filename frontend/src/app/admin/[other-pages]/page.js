@@ -810,23 +810,67 @@ function AddMachine({ session }) {
                                 style={{ backgroundColor: 'white', cursor: 'pointer' }}
                             >
                                 <option value="">Select Machine Type</option>
-                                <option value="Caterpillar Excavator">Caterpillar Excavator</option>
-                                <option value="Bulldozer">Bulldozer</option>
-                                <option value="Wheel Loader">Wheel Loader</option>
-                                <option value="Motor Grader">Motor Grader</option>
-                                <option value="Backhoe Loader">Backhoe Loader</option>
-                                <option value="Skid Steer Loader">Skid Steer Loader</option>
-                                <option value="Articulated Truck">Articulated Truck</option>
-                                <option value="Compactor">Compactor</option>
-                                <option value="Scrapers">Scrapers</option>
-                                <option value="Pipelayer">Pipelayer</option>
-                                <option value="Telehandler">Telehandler</option>
-                                <option value="Mini Excavator">Mini Excavator</option>
-                                <option value="Track Loader">Track Loader</option>
-                                <option value="Cold Planer">Cold Planer</option>
-                                <option value="Paver">Paver</option>
-                                <option value="Generator Set">Generator Set</option>
-                                <option value="Other">Other</option>
+                                <option value="Air Compressors">Air Compressors</option>
+                                <option value="Attachments">Attachments</option>
+                                <option value="Augers">Augers</option>
+                                <option value="Backhoes">Backhoes</option>
+                                <option value="Boom Lifts">Boom Lifts</option>
+                                <option value="Brush Hogs">Brush Hogs</option>
+                                <option value="Compact Track Loaders">Compact Track Loaders</option>
+                                <option value="Compactors">Compactors</option>
+                                <option value="Concrete Buggies">Concrete Buggies</option>
+                                <option value="Concrete Equipment">Concrete Equipment</option>
+                                <option value="Concrete Mixers">Concrete Mixers</option>
+                                <option value="Cranes">Cranes</option>
+                                <option value="Dozers">Dozers</option>
+                                <option value="Dump Trucks">Dump Trucks</option>
+                                <option value="Excavators">Excavators</option>
+                                <option value="Forklifts">Forklifts</option>
+                                <option value="Generators">Generators</option>
+                                <option value="Heaters">Heaters</option>
+                                <option value="Jackhammers">Jackhammers</option>
+                                <option value="Landscape Rakes">Landscape Rakes</option>
+                                <option value="Light Towers">Light Towers</option>
+                                <option value="Man Lifts">Man Lifts</option>
+                                <option value="Mini Skid Loaders">Mini Skid Loaders</option>
+                                <option value="Motor Graders">Motor Graders</option>
+                                <option value="Mulchers">Mulchers</option>
+                                <option value="Pavers">Pavers</option>
+                                <option value="Plate Tampers">Plate Tampers</option>
+                                <option value="Pressure Washers">Pressure Washers</option>
+                                <option value="Pumps">Pumps</option>
+                                <option value="Rammers">Rammers</option>
+                                <option value="Rock Trucks">Rock Trucks</option>
+                                <option value="Scissor Lifts">Scissor Lifts</option>
+                                <option value="Skid Steer Loaders">Skid Steer Loaders</option>
+                                <option value="Stump Grinders">Stump Grinders</option>
+                                <option value="Telehandlers">Telehandlers</option>
+                                <option value="Track Loaders">Track Loaders</option>
+                                <option value="Trailers">Trailers</option>
+                                <option value="Trench Rollers">Trench Rollers</option>
+                                <option value="Trenchers">Trenchers</option>
+                                <option value="Shoring Equipment">Shoring Equipment</option>
+                                <option value="UTVs">UTVs</option>
+                                <option value="Water Trucks">Water Trucks</option>
+                                <option value="Welders">Welders</option>
+                                <option value="Wheel Loaders">Wheel Loaders</option>
+                                <option value="Wood Chippers">Wood Chippers</option>
+                                <option value="Articulated Trucks">Articulated Trucks</option>
+                                <option value="Asphalt Pavers">Asphalt Pavers</option>
+                                <option value="Backhoe Loaders">Backhoe Loaders</option>
+                                <option value="Cold Planers">Cold Planers</option>
+                                <option value="Draglines">Draglines</option>
+                                <option value="Drills">Drills</option>
+                                <option value="Electric Rope Shovels">Electric Rope Shovels</option>
+                                <option value="Forest Machines">Forest Machines</option>
+                                <option value="Hydraulic Mining Shovels">Hydraulic Mining Shovels</option>
+                                <option value="Material Handlers">Material Handlers</option>
+                                <option value="Off-Highway Trucks">Off-Highway Trucks</option>
+                                <option value="Pipelayers">Pipelayers</option>
+                                <option value="Road Reclaimers">Road Reclaimers</option>
+                                <option value="Underground Hard Rock Equipment">Underground Hard Rock Equipment</option>
+                                <option value="Wheel Tractor-Scrapers">Wheel Tractor-Scrapers</option>
+
                             </select>
                             {errors.machineType && (
                                 <div className="form-error-message">
@@ -1206,9 +1250,13 @@ function AddOrder({ session }) {
 function ManageRequests({ session }) {
     const [requests, setRequests] = useState([])
     const [loading, setLoading] = useState(true)
-    const [filter, setFilter] = useState('all')
+    const [statusFilter, setStatusFilter] = useState('all')
+    const [typeFilter, setTypeFilter] = useState('all')
     const [searchTerm, setSearchTerm] = useState('')
     const [error, setError] = useState('')
+    const [updatingRequests, setUpdatingRequests] = useState(new Set())
+    const [availableTypes, setAvailableTypes] = useState([])
+    const [summary, setSummary] = useState(null)
 
     useEffect(() => {
         fetchRequests()
@@ -1220,8 +1268,17 @@ function ManageRequests({ session }) {
             setError('')
             
             let url = `${process.env.NEXT_PUBLIC_API_URL}/api/requests`
-            if (filter !== 'all') {
-                url += `?status=${encodeURIComponent(filter)}`
+            const params = new URLSearchParams()
+            
+            if (statusFilter !== 'all') {
+                params.append('status', statusFilter)
+            }
+            if (typeFilter !== 'all') {
+                params.append('request_type', typeFilter)
+            }
+            
+            if (params.toString()) {
+                url += `?${params.toString()}`
             }
 
             const response = await fetch(url, {
@@ -1236,7 +1293,9 @@ function ManageRequests({ session }) {
 
             const data = await response.json()
             if (data.success) {
-                setRequests(data.data || [])
+                setRequests(data.data?.requests || [])
+                setSummary(data.data?.summary || null)
+                setAvailableTypes(data.data?.available_types || [])
             } else {
                 throw new Error(data.message || 'Failed to load requests')
             }
@@ -1248,48 +1307,168 @@ function ManageRequests({ session }) {
         }
     }
 
-    const updateRequestStatus = async (requestId, newStatus, adminComments = '') => {
+    const [availableMachines, setAvailableMachines] = useState([])
+    const [showAssignmentModal, setShowAssignmentModal] = useState(false)
+    const [selectedRequest, setSelectedRequest] = useState(null)
+
+    const handleAcceptRequest = async (requestId) => {
+        if (updatingRequests.has(requestId)) return
+
+        const request = filteredRequests.find(r => r.requestID === requestId)
+        
+        // For new orders, show machine assignment modal
+        if (request.source === 'newOrders') {
+            setSelectedRequest(request)
+            await fetchAvailableMachines(request.machineType, request.checkOutDate, request.checkInDate)
+            setShowAssignmentModal(true)
+            return
+        }
+
+        // For regular requests, handle based on type
+        if (request.requestType === 'EXTENSION') {
+            const extensionDate = prompt('Enter new check-in date (YYYY-MM-DD):')
+            if (!extensionDate) return
+            
+            await approveRequest(requestId, { extension_date: extensionDate })
+        } else {
+            await approveRequest(requestId, { notes: 'Request approved by admin' })
+        }
+    }
+
+    const approveRequest = async (requestId, approvalData = {}) => {
+        setUpdatingRequests(prev => new Set([...prev, requestId]))
+        
         try {
-            const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/requests/${requestId}`, {
-                method: 'PUT',
+            const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/requests/requests/${requestId}/approve`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${session.accessToken}`,
+                },
+                body: JSON.stringify(approvalData),
+            })
+
+            const data = await response.json()
+
+            if (!response.ok) {
+                throw new Error(data.detail || 'Failed to approve request')
+            }
+
+            if (data.success) {
+                // Update the request in the local state
+                setRequests(requests => 
+                    (requests || []).map(request => 
+                        request.requestID === requestId 
+                            ? { ...request, status: 'COMPLETED', adminComments: approvalData.notes || 'Request approved' }
+                            : request
+                    )
+                )
+                alert(`Request approved successfully! ${data.data.type ? `(${data.data.type})` : ''}`)
+            } else {
+                throw new Error(data.message || 'Failed to approve request')
+            }
+        } catch (err) {
+            console.error('Error approving request:', err)
+            alert('Error approving request: ' + err.message)
+        } finally {
+            setUpdatingRequests(prev => {
+                const newSet = new Set(prev)
+                newSet.delete(requestId)
+                return newSet
+            })
+        }
+    }
+
+    const handleRejectRequest = async (requestId) => {
+        if (updatingRequests.has(requestId)) return
+
+        const rejectionReason = prompt('Please provide a reason for rejection:') 
+        if (!rejectionReason) return
+        
+        setUpdatingRequests(prev => new Set([...prev, requestId]))
+        
+        try {
+            const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/admin/requests/${requestId}/reject`, {
+                method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${session.accessToken}`,
                 },
                 body: JSON.stringify({
-                    status: newStatus,
-                    admin_comments: adminComments
+                    reason: rejectionReason
                 }),
             })
 
             const data = await response.json()
 
             if (!response.ok) {
-                throw new Error(data.detail || 'Failed to update request')
+                throw new Error(data.detail || 'Failed to reject request')
             }
 
             if (data.success) {
                 // Update the request in the local state
-                setRequests(requests.map(request => 
-                    request.requestID === requestId 
-                        ? { ...request, status: newStatus, adminComments: adminComments }
-                        : request
-                ))
+                setRequests(requests => 
+                    (requests || []).map(request => 
+                        request.requestID === requestId 
+                            ? { 
+                                ...request, 
+                                status: 'CANCELLED', 
+                                adminComments: rejectionReason 
+                            }
+                            : request
+                    )
+                )
+                alert('Request rejected successfully!')
             } else {
-                throw new Error(data.message || 'Failed to update request')
+                throw new Error(data.message || 'Failed to reject request')
             }
         } catch (err) {
-            console.error('Error updating request:', err)
-            alert('Error updating request: ' + err.message)
+            console.error('Error rejecting request:', err)
+            alert('Error rejecting request: ' + err.message)
+        } finally {
+            setUpdatingRequests(prev => {
+                const newSet = new Set(prev)
+                newSet.delete(requestId)
+                return newSet
+            })
         }
     }
 
-    const handleStatusChange = (requestId, currentStatus) => {
-        const newStatus = prompt(`Enter new status for request ${requestId}:`, currentStatus)
-        if (newStatus && newStatus !== currentStatus) {
-            const adminComments = prompt('Add admin comments (optional):') || ''
-            updateRequestStatus(requestId, newStatus, adminComments)
+    const fetchAvailableMachines = async (machineType, checkOutDate, checkInDate) => {
+        try {
+            const params = new URLSearchParams()
+            if (machineType) params.append('machine_type', machineType)
+            if (checkOutDate) params.append('check_out_date', checkOutDate)
+            if (checkInDate) params.append('check_in_date', checkInDate)
+
+            const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/requests/available-machines?${params.toString()}`, {
+                headers: {
+                    'Authorization': `Bearer ${session.accessToken}`,
+                },
+            })
+
+            if (response.ok) {
+                const data = await response.json()
+                setAvailableMachines(data.data?.machines || [])
+            }
+        } catch (error) {
+            console.error('Error fetching available machines:', error)
+            setAvailableMachines([])
         }
+    }
+
+    const handleMachineAssignment = async (machineId) => {
+        if (!selectedRequest) return
+
+        const approvalData = {
+            assigned_machine_id: machineId,
+            notes: `Order approved, machine ${machineId} assigned`
+        }
+
+        await approveRequest(selectedRequest.requestID, approvalData)
+        setShowAssignmentModal(false)
+        setSelectedRequest(null)
+        setAvailableMachines([])
     }
 
     const getRequestStatusBadge = (status) => {
@@ -1297,7 +1476,9 @@ function ManageRequests({ session }) {
             'IN_PROGRESS': { class: 'badge-occupied-modern', icon: Clock },
             'COMPLETED': { class: 'badge-ready-modern', icon: CheckCircle },
             'CANCELLED': { class: 'badge-maintenance-modern', icon: X },
-            'PENDING': { class: 'badge-pending-modern', icon: Clock }
+            'PENDING': { class: 'badge-pending-modern', icon: Clock },
+            'Approved': { class: 'badge-ready-modern', icon: CheckCircle },
+            'Denied': { class: 'badge-maintenance-modern', icon: X }
         }
 
         const config = statusConfig[status] || { class: 'badge-pending-modern', icon: Clock }
@@ -1311,17 +1492,73 @@ function ManageRequests({ session }) {
         )
     }
 
-    const filteredRequests = (requests?.requests || []).filter(request => {
-        const matchesFilter = filter === 'all' || request.status.toLowerCase() === filter.toLowerCase().replace('_', '_')
+    const filteredRequests = (requests || []).filter(request => {
         const matchesSearch = request.requestID?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                              request.machineID?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                             request.requestType?.toLowerCase().includes(searchTerm.toLowerCase())
-        return matchesFilter && matchesSearch
+                             request.requestType?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                             request.machineType?.toLowerCase().includes(searchTerm.toLowerCase())
+        return matchesSearch
     })
 
     useEffect(() => {
         fetchRequests()
-    }, [filter])
+    }, [statusFilter, typeFilter])
+
+    const canManageRequest = (status) => {
+        return ['IN_PROGRESS', 'PENDING', 'Pending'].includes(status)
+    }
+
+    const getRequestTypeDisplay = (request) => {
+        if (request.source === 'newOrders') {
+            return (
+                <div>
+                    <span className="request-type-badge new-order-badge">NEW ORDER</span>
+                    <div style={{ fontSize: '12px', color: '#6c757d', marginTop: '2px' }}>
+                        {request.machineType}
+                    </div>
+                </div>
+            )
+        }
+        return request.requestType || 'N/A'
+    }
+
+    const getMachineDisplay = (request) => {
+        if (request.source === 'newOrders') {
+            return (
+                <div>
+                    <span style={{ color: '#6c757d', fontStyle: 'italic' }}>To be assigned</span>
+                    {request.isAvailable && request.availableMachines && (
+                        <div style={{ fontSize: '11px', color: '#28a745', marginTop: '2px' }}>
+                            {request.availableCount} available
+                        </div>
+                    )}
+                </div>
+            )
+        }
+        return request.machineID || 'N/A'
+    }
+
+    const getAvailabilityIndicator = (request) => {
+        if (request.source !== 'newOrders') {
+            return null
+        }
+
+        return (
+            <div className={`availability-indicator ${request.isAvailable ? 'available' : 'unavailable'}`}>
+                {request.isAvailable ? (
+                    <>
+                        <CheckCircle size={12} />
+                        <span>Available</span>
+                    </>
+                ) : (
+                    <>
+                        <AlertTriangle size={12} />
+                        <span>Unavailable</span>
+                    </>
+                )}
+            </div>
+        )
+    }
 
     return (
         <div>
@@ -1349,6 +1586,36 @@ function ManageRequests({ session }) {
                 </div>
             )}
 
+            {/* Summary Cards */}
+            {summary && (
+                <div className="summary-cards" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginBottom: '24px' }}>
+                    <div className="summary-card">
+                        <div className="summary-number" style={{ fontSize: '24px', fontWeight: 'bold', color: '#0070f3' }}>
+                            {summary.total_items}
+                        </div>
+                        <div className="summary-label" style={{ fontSize: '14px', color: '#6c757d' }}>Total Items</div>
+                    </div>
+                    <div className="summary-card">
+                        <div className="summary-number" style={{ fontSize: '24px', fontWeight: 'bold', color: '#28a745' }}>
+                            {summary.requests_count}
+                        </div>
+                        <div className="summary-label" style={{ fontSize: '14px', color: '#6c757d' }}>Service Requests</div>
+                    </div>
+                    <div className="summary-card">
+                        <div className="summary-number" style={{ fontSize: '24px', fontWeight: 'bold', color: '#ffc107' }}>
+                            {summary.orders_count}
+                        </div>
+                        <div className="summary-label" style={{ fontSize: '14px', color: '#6c757d' }}>New Orders</div>
+                    </div>
+                    <div className="summary-card">
+                        <div className="summary-number" style={{ fontSize: '24px', fontWeight: 'bold', color: '#17a2b8' }}>
+                            {summary.available_orders || 0}
+                        </div>
+                        <div className="summary-label" style={{ fontSize: '14px', color: '#6c757d' }}>Available Orders</div>
+                    </div>
+                </div>
+            )}
+
             {/* Filters */}
             <div className="card-filters">
                 <div className="filters-row">
@@ -1366,8 +1633,8 @@ function ManageRequests({ session }) {
                         <div className="filter-select-wrapper">
                             <Filter className="filter-icon" />
                             <select
-                                value={filter}
-                                onChange={(e) => setFilter(e.target.value)}
+                                value={statusFilter}
+                                onChange={(e) => setStatusFilter(e.target.value)}
                                 className="filter-select"
                             >
                                 <option value="all">All Status</option>
@@ -1375,6 +1642,20 @@ function ManageRequests({ session }) {
                                 <option value="COMPLETED">Completed</option>
                                 <option value="CANCELLED">Cancelled</option>
                                 <option value="PENDING">Pending</option>
+                            </select>
+                            <ChevronDown className="select-arrow" />
+                        </div>
+                        <div className="filter-select-wrapper">
+                            <MessageSquare className="filter-icon" />
+                            <select
+                                value={typeFilter}
+                                onChange={(e) => setTypeFilter(e.target.value)}
+                                className="filter-select"
+                            >
+                                <option value="all">All Types</option>
+                                {availableTypes.map(type => (
+                                    <option key={type} value={type}>{type.replace('_', ' ')}</option>
+                                ))}
                             </select>
                             <ChevronDown className="select-arrow" />
                         </div>
@@ -1414,32 +1695,82 @@ function ManageRequests({ session }) {
                             <thead>
                                 <tr>
                                     <th>Request ID</th>
-                                    <th>Machine ID</th>
+                                    <th>Machine/Type</th>
                                     <th>Request Type</th>
                                     <th>Status</th>
+                                    <th>Availability</th>
                                     <th>Request Date</th>
                                     <th>Actions</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {filteredRequests.map((request) => (
-                                    <tr key={request.requestID}>
+                                    <tr key={request.requestID || request._id} className={!request.isAvailable && request.source === 'newOrders' ? 'unavailable-row' : ''}>
                                         <td>
                                             <strong>{request.requestID}</strong>
+                                            {request.source === 'newOrders' && (
+                                                <div style={{ fontSize: '11px', color: '#6c757d', marginTop: '2px' }}>
+                                                    Order
+                                                </div>
+                                            )}
                                         </td>
-                                        <td>{request.machineID}</td>
-                                        <td>{request.requestType}</td>
+                                        <td>{getMachineDisplay(request)}</td>
+                                        <td>{getRequestTypeDisplay(request)}</td>
                                         <td>{getRequestStatusBadge(request.status)}</td>
-                                        <td>{new Date(request.requestDate).toLocaleDateString()}</td>
+                                        <td>{getAvailabilityIndicator(request)}</td>
+                                        <td>{new Date(request.requestDate || request.orderDate).toLocaleDateString()}</td>
                                         <td>
                                             <div className="action-buttons">
-                                                <button 
-                                                    onClick={() => handleStatusChange(request.requestID, request.status)}
-                                                    className="action-btn action-btn-edit"
-                                                    title="Update Status"
-                                                >
-                                                    <Edit size={14} />
-                                                </button>
+                                                {canManageRequest(request.status) ? (
+                                                    <>
+                                                        <button 
+                                                            onClick={() => handleAcceptRequest(request.requestID)}
+                                                            className={`action-btn ${request.source === 'newOrders' && !request.isAvailable ? 'action-btn-accept-disabled' : 'action-btn-accept'}`}
+                                                            title={request.source === 'newOrders' && !request.isAvailable ? 'No machines available for this order' : 'Accept Request'}
+                                                            disabled={updatingRequests.has(request.requestID) || (request.source === 'newOrders' && !request.isAvailable)}
+                                                        >
+                                                            {updatingRequests.has(request.requestID) ? (
+                                                                <div 
+                                                                    className="loading-spinner" 
+                                                                    style={{ 
+                                                                        width: '14px', 
+                                                                        height: '14px', 
+                                                                        borderWidth: '2px',
+                                                                        borderColor: '#28a745 transparent #28a745 transparent'
+                                                                    }}
+                                                                ></div>
+                                                            ) : (
+                                                                <CheckCircle size={14} />
+                                                            )}
+                                                        </button>
+                                                        <button 
+                                                            onClick={() => handleRejectRequest(request.requestID)}
+                                                            className="action-btn action-btn-reject"
+                                                            title="Reject Request"
+                                                            disabled={updatingRequests.has(request.requestID)}
+                                                        >
+                                                            {updatingRequests.has(request.requestID) ? (
+                                                                <div 
+                                                                    className="loading-spinner" 
+                                                                    style={{ 
+                                                                        width: '14px', 
+                                                                        height: '14px', 
+                                                                        borderWidth: '2px',
+                                                                        borderColor: '#dc3545 transparent #dc3545 transparent'
+                                                                    }}
+                                                                ></div>
+                                                            ) : (
+                                                                <X size={14} />
+                                                            )}
+                                                        </button>
+                                                    </>
+                                                ) : (
+                                                    <span className="text-muted" style={{ fontSize: '12px', fontStyle: 'italic' }}>
+                                                        {request.status === 'COMPLETED' ? 'Approved' : 
+                                                         request.status === 'CANCELLED' ? 'Rejected' : 
+                                                         'No actions available'}
+                                                    </span>
+                                                )}
                                             </div>
                                         </td>
                                     </tr>
@@ -1449,6 +1780,272 @@ function ManageRequests({ session }) {
                     </div>
                 )}
             </div>
+
+            {/* Machine Assignment Modal */}
+            {showAssignmentModal && selectedRequest && (
+                <div className="modal-overlay" style={{
+                    position: 'fixed',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    zIndex: 1000
+                }}>
+                    <div className="modal-content" style={{
+                        backgroundColor: 'white',
+                        borderRadius: '8px',
+                        padding: '24px',
+                        maxWidth: '600px',
+                        width: '90%',
+                        maxHeight: '80vh',
+                        overflow: 'auto'
+                    }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                            <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 'bold' }}>
+                                Assign Machine to Order
+                            </h3>
+                            <button
+                                onClick={() => setShowAssignmentModal(false)}
+                                style={{
+                                    background: 'none',
+                                    border: 'none',
+                                    fontSize: '24px',
+                                    cursor: 'pointer',
+                                    padding: '4px'
+                                }}
+                            >
+                                ×
+                            </button>
+                        </div>
+
+                        <div style={{ marginBottom: '16px', padding: '12px', backgroundColor: '#f8f9fa', borderRadius: '4px' }}>
+                            <strong>Order Details:</strong><br />
+                            Order ID: {selectedRequest.requestID}<br />
+                            Machine Type: {selectedRequest.machineType}<br />
+                            Check-out: {new Date(selectedRequest.checkOutDate).toLocaleDateString()}<br />
+                            Check-in: {new Date(selectedRequest.checkInDate).toLocaleDateString()}
+                        </div>
+
+                        <h4 style={{ marginBottom: '12px' }}>Available Machines:</h4>
+
+                        {availableMachines.length === 0 ? (
+                            <div style={{ textAlign: 'center', padding: '20px', color: '#6c757d' }}>
+                                No available machines found for this order.
+                            </div>
+                        ) : (
+                            <div className="machines-grid" style={{
+                                display: 'grid',
+                                gap: '12px',
+                                maxHeight: '300px',
+                                overflowY: 'auto'
+                            }}>
+                                {availableMachines.map((machine) => (
+                                    <div
+                                        key={machine.machineID}
+                                        style={{
+                                            border: '1px solid #dee2e6',
+                                            borderRadius: '4px',
+                                            padding: '12px',
+                                            display: 'flex',
+                                            justifyContent: 'space-between',
+                                            alignItems: 'center'
+                                        }}
+                                    >
+                                        <div>
+                                            <strong>{machine.machineID}</strong><br />
+                                            <span style={{ fontSize: '14px', color: '#6c757d' }}>
+                                                {machine.machineType} - {machine.location}
+                                            </span><br />
+                                            <span style={{ fontSize: '12px', color: machine.status === 'READY' ? '#28a745' : '#ffc107' }}>
+                                                Status: {machine.status}
+                                            </span>
+                                        </div>
+                                        <button
+                                            onClick={() => handleMachineAssignment(machine.machineID)}
+                                            className="btn-modern btn-primary-modern"
+                                            style={{ padding: '8px 16px', fontSize: '14px' }}
+                                        >
+                                            Assign
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+
+                        <div style={{ marginTop: '20px', textAlign: 'right' }}>
+                            <button
+                                onClick={() => setShowAssignmentModal(false)}
+                                className="btn-modern btn-secondary-modern"
+                                style={{ marginRight: '8px' }}
+                            >
+                                Cancel
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            <style jsx>{`
+                .action-btn-accept {
+                    background-color: #28a745;
+                    border-color: #28a745;
+                    color: white;
+                }
+                .action-btn-accept:hover {
+                    background-color: #218838;
+                    border-color: #1e7e34;
+                }
+                .action-btn-accept:disabled {
+                    background-color: #6c757d;
+                    border-color: #6c757d;
+                    opacity: 0.6;
+                    cursor: not-allowed;
+                }
+                .action-btn-accept-disabled {
+                    background-color: #dc3545;
+                    border-color: #dc3545;
+                    color: white;
+                    opacity: 0.6;
+                    cursor: not-allowed;
+                }
+                .action-btn-reject {
+                    background-color: #dc3545;
+                    border-color: #dc3545;
+                    color: white;
+                }
+                .action-btn-reject:hover {
+                    background-color: #c82333;
+                    border-color: #bd2130;
+                }
+                .action-btn-reject:disabled {
+                    background-color: #6c757d;
+                    border-color: #6c757d;
+                    opacity: 0.6;
+                    cursor: not-allowed;
+                }
+                .action-buttons {
+                    display: flex;
+                    gap: 8px;
+                    justify-content: center;
+                }
+                .text-muted {
+                    color: #6c757d;
+                }
+                .summary-card {
+                    background: white;
+                    border-radius: 8px;
+                    padding: 16px;
+                    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                    text-align: center;
+                }
+                .request-type-badge {
+                    display: inline-block;
+                    padding: 2px 6px;
+                    border-radius: 4px;
+                    font-size: 11px;
+                    font-weight: bold;
+                    text-transform: uppercase;
+                }
+                .new-order-badge {
+                    background-color: #ffc107;
+                    color: #212529;
+                }
+                .availability-indicator {
+                    display: flex;
+                    align-items: center;
+                    gap: 4px;
+                    font-size: 12px;
+                    font-weight: 500;
+                }
+                .availability-indicator.available {
+                    color: #28a745;
+                }
+                .availability-indicator.unavailable {
+                    color: #dc3545;
+                }
+                .unavailable-row {
+                    background-color: #fff5f5;
+                }
+                .unavailable-row:hover {
+                    background-color: #fed7d7;
+                }
+                    border-color: #6c757d;
+                    opacity: 0.6;
+                    cursor: not-allowed;
+                }
+                .action-btn-accept-disabled {
+                    background-color: #dc3545;
+                    border-color: #dc3545;
+                    color: white;
+                    opacity: 0.6;
+                    cursor: not-allowed;
+                }
+                .action-btn-reject {
+                    background-color: #dc3545;
+                    border-color: #dc3545;
+                    color: white;
+                }
+                .action-btn-reject:hover {
+                    background-color: #c82333;
+                    border-color: #bd2130;
+                }
+                .action-btn-reject:disabled {
+                    background-color: #6c757d;
+                    border-color: #6c757d;
+                    opacity: 0.6;
+                    cursor: not-allowed;
+                }
+                .action-buttons {
+                    display: flex;
+                    gap: 8px;
+                    justify-content: center;
+                }
+                .text-muted {
+                    color: #6c757d;
+                }
+                .summary-card {
+                    background: white;
+                    border-radius: 8px;
+                    padding: 16px;
+                    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                    text-align: center;
+                }
+                .request-type-badge {
+                    display: inline-block;
+                    padding: 2px 6px;
+                    border-radius: 4px;
+                    font-size: 11px;
+                    font-weight: bold;
+                    text-transform: uppercase;
+                }
+                .new-order-badge {
+                    background-color: #ffc107;
+                    color: #212529;
+                }
+                .availability-indicator {
+                    display: flex;
+                    align-items: center;
+                    gap: 4px;
+                    font-size: 12px;
+                    font-weight: 500;
+                }
+                .availability-indicator.available {
+                    color: #28a745;
+                }
+                .availability-indicator.unavailable {
+                    color: #dc3545;
+                }
+                .unavailable-row {
+                    background-color: #fff5f5;
+                }
+                .unavailable-row:hover {
+                    background-color: #fed7d7;
+                }
+            `}</style>
         </div>
     )
 }
