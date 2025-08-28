@@ -1,30 +1,31 @@
 'use client'
 
+import {
+    BarChart3,
+    Bell,
+    ChevronDown,
+    FileText,
+    Lightbulb,
+    LogOut,
+    Menu,
+    MessageSquare,
+    Plus,
+    Search,
+    Settings,
+    Truck,
+    User
+} from 'lucide-react';
 import { signOut, useSession } from 'next-auth/react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { useState } from 'react';
-import { 
-    BarChart3, 
-    Truck, 
-    FileText, 
-    MessageSquare, 
-    Settings, 
-    User, 
-    Plus,
-    Lightbulb,
-    Menu,
-    LogOut,
-    Bell,
-    Search,
-    ChevronDown
-} from 'lucide-react';
+import { useState, useEffect } from 'react';
 
 const Layout = ({ children }) => {
     const { data: session } = useSession();
     const router = useRouter();
     const pathname = usePathname();
     const [sidebarOpen, setSidebarOpen] = useState(false);
+    const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
 
     const isAdmin = session?.user?.role === 'admin';
     const isCustomer = session?.user?.role === 'customer';
@@ -49,6 +50,17 @@ const Layout = ({ children }) => {
         { name: 'Recommendations', href: '/customer/recommendations', icon: Lightbulb },
     ];
 
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (profileDropdownOpen && !event.target.closest('.user-menu')) {
+                setProfileDropdownOpen(false);
+            }
+        };
+
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, [profileDropdownOpen]);
+
     const navItems = isAdmin ? adminNavItems : customerNavItems;
 
     return (
@@ -65,7 +77,7 @@ const Layout = ({ children }) => {
                         </div>
                     </div>
                 </div>
-                
+
                 {/* Navigation */}
                 <nav className="sidebar-nav">
                     <div className="nav-section">
@@ -126,7 +138,7 @@ const Layout = ({ children }) => {
                         >
                             <Menu size={20} />
                         </button>
-                        
+
                         {/* Breadcrumb */}
                         <div className="breadcrumb">
                             <span className="breadcrumb-item">
@@ -140,30 +152,55 @@ const Layout = ({ children }) => {
                     </div>
 
                     <div className="navbar-right">
-                        {/* Search Bar */}
-                        <div className="navbar-search">
-                            <Search className="search-icon" size={16} />
-                            <input 
-                                type="text" 
-                                placeholder="Search..." 
-                                className="search-input"
-                            />
-                        </div>
-
                         {/* Notifications */}
-                        <button className="notification-btn">
+                        <button
+                            className="notification-btn"
+                            onClick={() => {
+                                const notificationSection = document.getElementById('notifications-section');
+                                if (notificationSection) {
+                                    notificationSection.scrollIntoView({ behavior: 'smooth' });
+                                }
+                            }}
+                            title="View Notifications"
+                        >
                             <Bell size={18} />
-                            <span className="notification-badge">3</span>
+                            <span className="notification-badge"></span>
                         </button>
 
                         {/* User Menu */}
                         <div className="user-menu">
-                            <button className="user-menu-btn">
+                            <button
+                                className="user-menu-btn"
+                                onClick={() => setProfileDropdownOpen(!profileDropdownOpen)}
+                            >
                                 <div className="user-menu-avatar">
                                     <User size={16} />
                                 </div>
+                                <span className="user-name-navbar">{session?.user?.name || 'User'}</span>
                                 <ChevronDown size={14} />
                             </button>
+
+                            {/* Profile Dropdown */}
+                            {profileDropdownOpen && (
+                                <div className="user-menu-dropdown">
+                                    <div className="dropdown-item">
+                                        <User size={16} />
+                                        <span>{session?.user?.name}</span>
+                                    </div>
+                                    <div className="dropdown-item">
+                                        <span className="user-role-text">{session?.user?.role}</span>
+                                    </div>
+                                    <div className="dropdown-divider"></div>
+                                    <button className="dropdown-item dropdown-button" onClick={() => {/* Add profile page navigation */ }}>
+                                        <Settings size={16} />
+                                        <span>Settings</span>
+                                    </button>
+                                    <button className="dropdown-item dropdown-button" onClick={handleSignOut}>
+                                        <LogOut size={16} />
+                                        <span>Sign Out</span>
+                                    </button>
+                                </div>
+                            )}
                         </div>
                     </div>
                 </header>
@@ -178,7 +215,7 @@ const Layout = ({ children }) => {
 
             {/* Mobile Overlay */}
             {sidebarOpen && (
-                <div 
+                <div
                     className="mobile-overlay"
                     onClick={() => setSidebarOpen(false)}
                 ></div>

@@ -305,7 +305,7 @@ export default function AdminDashboard() {
                         </div>
 
                         {/* Notifications Panel */}
-                        <div className="dashboard-card">
+                        <div className="dashboard-card" id="notifications-section">
                             <div className="card-header-modern">
                                 <h3 className="card-title-modern">System Notifications</h3>
                                 {stats.notifications && stats.notifications.length > 0 && (
