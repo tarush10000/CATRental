@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter, useParams } from 'next/navigation'
 import Layout from '@/components/Layout'
@@ -8,7 +8,7 @@ import {
     Truck, Plus, FileText, MessageSquare, Settings,
     TrendingUp, Wrench, Activity, Clock, CheckCircle,
     AlertTriangle, Package, Users, Search, Filter,
-    Edit, Trash2, Save, X, ChevronDown, RefreshCw
+    Edit, Trash2, Save, X, ChevronDown, RefreshCw,Upload
 } from 'lucide-react'
 
 export default function AdminOtherPages() {
@@ -341,10 +341,251 @@ function AddMachine({ session }) {
         location: '',
         siteId: ''
     })
+    const [coordinates, setCoordinates] = useState({ lat: null, lng: null })
     const [isScanning, setIsScanning] = useState(false)
     const [isSubmitting, setIsSubmitting] = useState(false)
     const [errors, setErrors] = useState({})
+    const [locationLoading, setLocationLoading] = useState(false)
+    const [stream, setStream] = useState(null)
+    const [showScanner, setShowScanner] = useState(false)
+    const videoRef = useRef(null)
     const router = useRouter()
+
+    // Cleanup camera stream on component unmount
+    useEffect(() => {
+        return () => {
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop())
+            }
+        }
+    }, [stream])
+
+    // Load Quagga library for barcode scanning
+    useEffect(() => {
+        const script = document.createElement('script')
+        script.src = 'https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js'
+        script.async = true
+        document.head.appendChild(script)
+
+        return () => {
+            if (document.head.contains(script)) {
+                document.head.removeChild(script)
+            }
+        }
+    }, [])
+
+    const fetchLocationCoordinates = async (locationName) => {
+        if (!locationName.trim()) {
+            setCoordinates({ lat: null, lng: null })
+            return
+        }
+
+        setLocationLoading(true)
+        try {
+            // Using OpenStreetMap Nominatim API
+            const response = await fetch(
+                `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(locationName)}&limit=1`
+            )
+            
+            if (!response.ok) {
+                throw new Error('Failed to fetch location data')
+            }
+
+            const data = await response.json()
+            
+            if (data && data.length > 0) {
+                const coords = {
+                    lat: parseFloat(data[0].lat),
+                    lng: parseFloat(data[0].lon)
+                }
+                setCoordinates(coords)
+            } else {
+                setCoordinates({ lat: null, lng: null })
+            }
+        } catch (err) {
+            console.error('Location fetch error:', err)
+            setCoordinates({ lat: null, lng: null })
+        } finally {
+            setLocationLoading(false)
+        }
+    }
+
+    const startCameraScanning = async () => {
+        try {
+            setIsScanning(true)
+            setShowScanner(true)
+
+            // Get camera permission
+            const mediaStream = await navigator.mediaDevices.getUserMedia({ 
+                video: { 
+                    facingMode: 'environment',
+                    width: { ideal: 640 },
+                    height: { ideal: 480 }
+                } 
+            })
+            
+            setStream(mediaStream)
+            
+            if (videoRef.current) {
+                videoRef.current.srcObject = mediaStream
+                videoRef.current.play()
+            }
+
+            // Initialize Quagga after video starts
+            setTimeout(() => {
+                if (window.Quagga && videoRef.current) {
+                    window.Quagga.init({
+                        inputStream: {
+                            name: "Live",
+                            type: "LiveStream",
+                            target: videoRef.current,
+                            constraints: {
+                                width: 640,
+                                height: 480,
+                                facingMode: "environment"
+                            }
+                        },
+                        decoder: {
+                            readers: [
+                                "code_128_reader",
+                                "ean_reader",
+                                "ean_8_reader",
+                                "code_39_reader",
+                                "code_39_vin_reader",
+                                "codabar_reader",
+                                "upc_reader",
+                                "upc_e_reader",
+                                "i2of5_reader"
+                            ]
+                        }
+                    }, (err) => {
+                        if (err) {
+                            console.error('Quagga initialization failed:', err)
+                            stopScanning()
+                            return
+                        }
+                        window.Quagga.start()
+                    })
+
+                    window.Quagga.onDetected((data) => {
+                        const code = data.codeResult.code
+                        setFormData(prev => ({
+                            ...prev,
+                            machineId: code
+                        }))
+                        stopScanning()
+                    })
+                }
+            }, 1000)
+
+        } catch (err) {
+            console.error('Camera access failed:', err)
+            alert('Camera access denied or not available')
+            setIsScanning(false)
+            setShowScanner(false)
+        }
+    }
+
+    const stopScanning = () => {
+        if (window.Quagga) {
+            window.Quagga.stop()
+        }
+        if (stream) {
+            stream.getTracks().forEach(track => track.stop())
+            setStream(null)
+        }
+        if (videoRef.current) {
+            videoRef.current.srcObject = null
+        }
+        setIsScanning(false)
+        setShowScanner(false)
+    }
+
+    const handleBarcodeUpload = async () => {
+        // Create a file input for image upload
+        const fileInput = document.createElement('input')
+        fileInput.type = 'file'
+        fileInput.accept = 'image/*'
+        fileInput.capture = 'environment'
+        
+        fileInput.onchange = async (e) => {
+            const file = e.target.files[0]
+            if (file) {
+                setIsScanning(true)
+                try {
+                    // Create image element to load the file
+                    const img = new Image()
+                    const canvas = document.createElement('canvas')
+                    const ctx = canvas.getContext('2d')
+                    
+                    img.onload = () => {
+                        // Set canvas dimensions to match image
+                        canvas.width = img.width
+                        canvas.height = img.height
+                        
+                        // Draw image on canvas
+                        ctx.drawImage(img, 0, 0)
+                        
+                        // Use Quagga to decode barcode from canvas
+                        if (window.Quagga) {
+                            window.Quagga.decodeSingle({
+                                src: canvas.toDataURL(),
+                                numOfWorkers: 0,
+                                inputStream: {
+                                    size: 800
+                                },
+                                decoder: {
+                                    readers: [
+                                        "code_128_reader",
+                                        "ean_reader",
+                                        "ean_8_reader",
+                                        "code_39_reader",
+                                        "code_39_vin_reader",
+                                        "codabar_reader",
+                                        "upc_reader",
+                                        "upc_e_reader",
+                                        "i2of5_reader"
+                                    ]
+                                }
+                            }, (result) => {
+                                if (result && result.codeResult) {
+                                    const code = result.codeResult.code
+                                    setFormData(prev => ({
+                                        ...prev,
+                                        machineId: code
+                                    }))
+                                    // alert(`Barcode detected: ${code}`)
+                                } else {
+                                    console.log(result)
+                                    alert('No barcode found in the image. Please try a clearer image.')
+                                }
+                                setIsScanning(false)
+                            })
+                        } else {
+                            alert('Barcode scanner not ready. Please try again.')
+                            setIsScanning(false)
+                        }
+                    }
+                    
+                    img.onerror = () => {
+                        alert('Failed to load image')
+                        setIsScanning(false)
+                    }
+                    
+                    // Create object URL and set as image source
+                    const imageUrl = URL.createObjectURL(file)
+                    img.src = imageUrl
+                    
+                } catch (error) {
+                    console.error('Barcode upload error:', error)
+                    alert('Error processing barcode: ' + error.message)
+                    setIsScanning(false)
+                }
+            }
+        }
+        
+        fileInput.click()
+    }
 
     const handleSubmit = async (e) => {
         e.preventDefault()
@@ -364,18 +605,25 @@ function AddMachine({ session }) {
         setErrors({})
 
         try {
+            const payload = {
+                machine_id: formData.machineId.trim(),
+                machine_type: formData.machineType.trim(),
+                // location: formData.location.trim(),
+                site_id: formData.siteId.trim() || null
+            }
+
+            // Add coordinates as comma-separated string if available
+            if (coordinates.lat && coordinates.lng) {
+                payload.location = `${coordinates.lat},${coordinates.lng}`
+            }
+
             const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/machines`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${session.accessToken}`,
                 },
-                body: JSON.stringify({
-                    machine_id: formData.machineId.trim(),
-                    machine_type: formData.machineType.trim(),
-                    location: formData.location.trim(),
-                    site_id: formData.siteId.trim() || null
-                }),
+                body: JSON.stringify(payload),
             })
 
             const data = await response.json()
@@ -409,64 +657,21 @@ function AddMachine({ session }) {
             [name]: value
         })
         
+        // Handle location coordinate fetching
+        if (name === 'location') {
+            // Debounce the API call
+            clearTimeout(window.locationTimeout)
+            window.locationTimeout = setTimeout(() => {
+                fetchLocationCoordinates(value)
+            }, 1000)
+        }
+        
         // Clear error when user starts typing
         if (errors[name]) {
             setErrors({
                 ...errors,
                 [name]: ''
             })
-        }
-    }
-
-    const handleBarcodeSearch = async () => {
-        setIsScanning(true)
-        
-        try {
-            // Create a file input for image upload (simulating barcode scan)
-            const fileInput = document.createElement('input')
-            fileInput.type = 'file'
-            fileInput.accept = 'image/*'
-            fileInput.capture = 'environment' // Use camera on mobile
-            
-            fileInput.onchange = async (e) => {
-                const file = e.target.files[0]
-                if (file) {
-                    try {
-                        const formData = new FormData()
-                        formData.append('file', file)
-
-                        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/machines/scan-barcode`, {
-                            method: 'POST',
-                            headers: {
-                                'Authorization': `Bearer ${session.accessToken}`,
-                            },
-                            body: formData,
-                        })
-
-                        const data = await response.json()
-                        
-                        if (data.success && data.data.barcodes && data.data.barcodes.length > 0) {
-                            const barcode = data.data.barcodes[0]
-                            setFormData({
-                                ...formData,
-                                machineId: barcode.machine_id || '',
-                                machineType: barcode.machine_type || ''
-                            })
-                        } else {
-                            alert('No barcode data found in image')
-                        }
-                    } catch (error) {
-                        console.error('Barcode scan error:', error)
-                        alert('Error processing barcode: ' + error.message)
-                    }
-                }
-                setIsScanning(false)
-            }
-            
-            fileInput.click()
-        } catch (error) {
-            console.error('Barcode scan setup error:', error)
-            setIsScanning(false)
         }
     }
 
@@ -488,26 +693,85 @@ function AddMachine({ session }) {
                 <Truck className="barcode-icon" />
                 <h3 className="barcode-title">Scan Machine Barcode</h3>
                 <p className="barcode-description">
-                    Quickly populate machine details by scanning the equipment barcode
+                    Quickly populate machine details by scanning or uploading a barcode image
                 </p>
-                <button
-                    type="button"
-                    onClick={handleBarcodeSearch}
-                    disabled={isScanning}
-                    className="btn-modern btn-secondary-modern"
-                >
-                    {isScanning ? (
-                        <>
-                            <div className="loading-spinner" style={{ width: '1rem', height: '1rem', borderWidth: '2px' }}></div>
-                            Processing...
-                        </>
-                    ) : (
-                        <>
-                            <Search size={16} />
-                            Scan Barcode
-                        </>
+                <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', flexWrap: 'wrap' }}>
+                    <button
+                        type="button"
+                        onClick={startCameraScanning}
+                        disabled={isScanning || showScanner}
+                        className="btn-modern btn-secondary-modern"
+                    >
+                        {showScanner ? (
+                            <>
+                                <div className="loading-spinner" style={{ width: '1rem', height: '1rem', borderWidth: '2px' }}></div>
+                                Scanning...
+                            </>
+                        ) : (
+                            <>
+                                <Search size={16} />
+                                Live Scan
+                            </>
+                        )}
+                    </button>
+                    
+                    <button
+                        type="button"
+                        onClick={handleBarcodeUpload}
+                        disabled={isScanning}
+                        className="btn-modern btn-secondary-modern"
+                    >
+                        {isScanning && !showScanner ? (
+                            <>
+                                <div className="loading-spinner" style={{ width: '1rem', height: '1rem', borderWidth: '2px' }}></div>
+                                Processing...
+                            </>
+                        ) : (
+                            <>
+                                <Upload size={16} />
+                                Upload Image
+                            </>
+                        )}
+                    </button>
+
+                    {showScanner && (
+                        <button
+                            type="button"
+                            onClick={stopScanning}
+                            className="btn-modern btn-secondary-modern"
+                        >
+                            <X size={16} />
+                            Stop
+                        </button>
                     )}
-                </button>
+                </div>
+
+                {/* Camera Scanner Display */}
+                {showScanner && (
+                    <div style={{ 
+                        marginTop: '15px', 
+                        background: '#000', 
+                        borderRadius: '8px', 
+                        padding: '10px', 
+                        textAlign: 'center' 
+                    }}>
+                        <video 
+                            ref={videoRef} 
+                            style={{ 
+                                width: '100%', 
+                                maxWidth: '300px', 
+                                height: 'auto', 
+                                borderRadius: '4px' 
+                            }}
+                            autoPlay 
+                            playsInline 
+                            muted
+                        />
+                        <p style={{ color: 'white', margin: '10px 0 0 0', fontSize: '14px' }}>
+                            Point camera at barcode
+                        </p>
+                    </div>
+                )}
             </div>
 
             {/* Manual Entry Form */}
@@ -538,14 +802,32 @@ function AddMachine({ session }) {
                             <label className="form-label-modern form-label-required">
                                 Machine Type
                             </label>
-                            <input
-                                type="text"
+                            <select
                                 name="machineType"
                                 value={formData.machineType}
                                 onChange={handleChange}
                                 className={`form-input-modern ${errors.machineType ? 'form-input-error' : ''}`}
-                                placeholder="e.g., Excavator 320"
-                            />
+                                style={{ backgroundColor: 'white', cursor: 'pointer' }}
+                            >
+                                <option value="">Select Machine Type</option>
+                                <option value="Caterpillar Excavator">Caterpillar Excavator</option>
+                                <option value="Bulldozer">Bulldozer</option>
+                                <option value="Wheel Loader">Wheel Loader</option>
+                                <option value="Motor Grader">Motor Grader</option>
+                                <option value="Backhoe Loader">Backhoe Loader</option>
+                                <option value="Skid Steer Loader">Skid Steer Loader</option>
+                                <option value="Articulated Truck">Articulated Truck</option>
+                                <option value="Compactor">Compactor</option>
+                                <option value="Scrapers">Scrapers</option>
+                                <option value="Pipelayer">Pipelayer</option>
+                                <option value="Telehandler">Telehandler</option>
+                                <option value="Mini Excavator">Mini Excavator</option>
+                                <option value="Track Loader">Track Loader</option>
+                                <option value="Cold Planer">Cold Planer</option>
+                                <option value="Paver">Paver</option>
+                                <option value="Generator Set">Generator Set</option>
+                                <option value="Other">Other</option>
+                            </select>
                             {errors.machineType && (
                                 <div className="form-error-message">
                                     <AlertTriangle size={12} />
@@ -557,6 +839,11 @@ function AddMachine({ session }) {
                         <div className="form-group-modern">
                             <label className="form-label-modern form-label-required">
                                 Location
+                                {locationLoading && (
+                                    <span style={{ marginLeft: '8px', fontSize: '16px', animation: 'spin 1s linear infinite' }}>
+                                        🌍
+                                    </span>
+                                )}
                             </label>
                             <input
                                 type="text"
@@ -564,8 +851,21 @@ function AddMachine({ session }) {
                                 value={formData.location}
                                 onChange={handleChange}
                                 className={`form-input-modern ${errors.location ? 'form-input-error' : ''}`}
-                                placeholder="e.g., Warehouse A"
+                                placeholder="e.g., New York, USA"
                             />
+                            {coordinates.lat && coordinates.lng && (
+                                <div style={{ 
+                                    marginTop: '8px',
+                                    padding: '8px 12px',
+                                    background: '#e8f5e8',
+                                    borderRadius: '4px',
+                                    borderLeft: '4px solid #28a745',
+                                    fontSize: '14px',
+                                    color: '#155724'
+                                }}>
+                                    📍 Coordinates: {coordinates.lat.toFixed(6)}, {coordinates.lng.toFixed(6)}
+                                </div>
+                            )}
                             {errors.location && (
                                 <div className="form-error-message">
                                     <AlertTriangle size={12} />
@@ -600,7 +900,7 @@ function AddMachine({ session }) {
                         </button>
                         <button
                             type="submit"
-                            disabled={isSubmitting}
+                            disabled={isSubmitting || showScanner}
                             className="btn-modern btn-primary-modern"
                         >
                             {isSubmitting ? (
@@ -618,6 +918,13 @@ function AddMachine({ session }) {
                     </div>
                 </form>
             </div>
+
+            <style jsx>{`
+                @keyframes spin {
+                    from { transform: rotate(0deg); }
+                    to { transform: rotate(360deg); }
+                }
+            `}</style>
         </div>
     )
 }
