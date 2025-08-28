@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { signIn } from 'next-auth/react'
+import { signIn, getSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Eye, EyeOff, Truck, AlertCircle } from 'lucide-react'
@@ -44,9 +44,20 @@ export default function SignIn() {
                 toast.error('Sign in failed')
             } else {
                 toast.success('Welcome to CatRental!')
-
-                // Redirect based on user role (will be handled by the session)
-                router.push('/admin/dashboard') // Default redirect, will be corrected by middleware
+                
+                // Get the updated session to check user role
+                const session = await getSession()
+                
+                // Redirect based on user role
+                if (session?.user?.role === 'admin') {
+                    router.push('/admin/dashboard')
+                } else if (session?.user?.role === 'customer') {
+                    router.push('/customer/dashboard')
+                } else {
+                    // Fallback redirect
+                    router.push('/admin/dashboard')
+                }
+                
                 router.refresh()
             }
         } catch (error) {
@@ -119,7 +130,7 @@ export default function SignIn() {
                                         type={showPassword ? 'text' : 'password'}
                                         autoComplete="current-password"
                                         required
-                                        className="form-input pr-12"
+                                        className="form-input pr-10"
                                         placeholder="Enter your password"
                                         value={formData.password}
                                         onChange={handleChange}
@@ -130,80 +141,46 @@ export default function SignIn() {
                                         onClick={togglePasswordVisibility}
                                     >
                                         {showPassword ? (
-                                            <EyeOff className="h-5 w-5 text-cat-medium-gray hover:text-cat-dark-gray" />
+                                            <EyeOff className="h-5 w-5 text-gray-400" />
                                         ) : (
-                                            <Eye className="h-5 w-5 text-cat-medium-gray hover:text-cat-dark-gray" />
+                                            <Eye className="h-5 w-5 text-gray-400" />
                                         )}
                                     </button>
                                 </div>
                             </div>
 
-                            {/* Remember Me & Forgot Password */}
-                            <div className="flex items-center justify-between">
-                                <div className="flex items-center">
-                                    <input
-                                        id="remember-me"
-                                        name="remember-me"
-                                        type="checkbox"
-                                        className="h-4 w-4 text-cat-yellow focus:ring-cat-yellow border-cat-medium-gray rounded"
-                                    />
-                                    <label htmlFor="remember-me" className="ml-2 block text-sm text-cat-medium-gray">
-                                        Remember me
-                                    </label>
-                                </div>
-
-                                <div className="text-sm">
-                                    <Link
-                                        href="/auth/forgot-password"
-                                        className="font-medium text-cat-yellow hover:underline"
-                                    >
-                                        Forgot password?
-                                    </Link>
-                                </div>
-                            </div>
-
                             {/* Submit Button */}
-                            <div className="form-group">
+                            <div>
                                 <button
                                     type="submit"
                                     disabled={loading}
-                                    className="btn-primary w-full flex items-center justify-center"
+                                    className="btn-primary w-full"
                                 >
                                     {loading ? (
-                                        <>
-                                            <div className="spinner mr-2"></div>
+                                        <div className="flex items-center justify-center">
+                                            <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
                                             Signing in...
-                                        </>
+                                        </div>
                                     ) : (
-                                        <>
-                                            <Truck className="h-5 w-5 mr-2" />
-                                            Sign in
-                                        </>
+                                        'Sign In'
                                     )}
                                 </button>
                             </div>
                         </form>
+
+                        {/* Sign Up Link */}
+                        <div className="mt-6 text-center">
+                            <p className="text-sm text-cat-medium-gray">
+                                Don't have an account?{' '}
+                                <Link 
+                                    href="/auth/signup" 
+                                    className="font-medium text-cat-yellow hover:text-cat-dark-gray transition-colors"
+                                >
+                                    Sign up here
+                                </Link>
+                            </p>
+                        </div>
                     </div>
-                </div>
-
-                {/* Sign Up Link */}
-                <div className="text-center">
-                    <p className="text-sm text-cat-medium-gray">
-                        Don't have an account?{' '}
-                        <Link
-                            href="/auth/signup"
-                            className="font-medium text-cat-yellow hover:underline"
-                        >
-                            Create one here
-                        </Link>
-                    </p>
-                </div>
-
-                {/* Footer */}
-                <div className="text-center">
-                    <p className="text-xs text-cat-medium-gray">
-                        © 2025 CatRental. Built for efficient equipment management.
-                    </p>
                 </div>
             </div>
         </div>
