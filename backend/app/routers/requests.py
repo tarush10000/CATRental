@@ -1,10 +1,10 @@
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Query
 from typing import List, Optional
 import motor.motor_asyncio
 from decouple import config
 from datetime import datetime
 import uuid
-
+from bson import ObjectId
 from ..models.database import RequestCreate, RequestUpdate, APIResponse, RequestStatus
 from .auth import get_current_user
 
@@ -14,6 +14,28 @@ router = APIRouter()
 MONGODB_URL = config("MONGODB_URL")
 client = motor.motor_asyncio.AsyncIOMotorClient(MONGODB_URL)
 db = client.caterpillar_db
+
+def get_score_category(score: int) -> str:
+    """Convert numeric score to category"""
+    if score >= 750:
+        return "Excellent"
+    elif score >= 650:
+        return "Good"
+    elif score >= 550:
+        return "Fair"
+    else:
+        return "Poor"
+
+def get_score_color(score: int) -> str:
+    """Get color code for score display"""
+    if score >= 750:
+        return "green"
+    elif score >= 650:
+        return "blue"
+    elif score >= 550:
+        return "yellow"
+    else:
+        return "red"
 
 @router.post("/", response_model=APIResponse)
 async def create_request(
@@ -48,6 +70,209 @@ async def create_request(
         else:
             raise HTTPException(status_code=500, detail="Failed to create request")
             
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+@router.get("/", response_model=APIResponse)
+async def get_requests_and_orders(
+    current_user: dict = Depends(get_current_user),
+    status: Optional[str] = Query(None),
+    request_type: Optional[str] = Query(None),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=500)
+):
+    """
+    Enhanced endpoint to get all requests and pending orders with user health scores
+    """
+    try:
+        if current_user["role"] != "admin":
+            raise HTTPException(status_code=403, detail="Admin access required")
+        
+        dealership_id = current_user["dealershipID"]
+        
+        # Build query for requests
+        requests_query = {}
+        
+        # Get requests associated with this dealership's machines
+        dealership_machines = await db.machines.find(
+            {"dealerID": dealership_id},
+            {"machineID": 1}
+        ).to_list(length=None)
+        dealership_machine_ids = [m["machineID"] for m in dealership_machines]
+        
+        requests_query["machineID"] = {"$in": dealership_machine_ids}
+        
+        # Apply status filter for requests
+        if status and status in ["IN_PROGRESS", "APPROVED", "DENIED"]:
+            requests_query["status"] = status.replace("_", "-")
+        
+        # Orders query - only fetch pending orders unless specific status requested
+        orders_query = None
+        if not status or status == "PENDING":
+            orders_query = {"status": "Pending"}
+        else:
+            if status in ["APPROVED", "COMPLETED", "CANCELLED", "IN_PROGRESS"]:
+                orders_query = None
+        
+        # Apply type filter for requests only
+        if request_type and request_type != 'all':
+            requests_query["requestType"] = {"$regex": request_type, "$options": "i"}
+        
+        # Fetch requests from requests table
+        requests_cursor = db.requests.find(requests_query).sort("requestDate", -1)
+        requests_list = await requests_cursor.to_list(length=100)
+        
+        # Fetch pending orders from newOrders table
+        orders_list = []
+        if orders_query is not None:
+            orders_cursor = db.neworders.find(orders_query).sort("orderDate", -1)
+            orders_list = await orders_cursor.to_list(length=100)
+        
+        # Enhanced: Enrich requests with user health scores and details
+        for request in requests_list:
+            request["_id"] = str(request["_id"])
+            request["source"] = "requests"
+            
+            # Get user details including health score
+            user = await db.users.find_one({"userID": request["userID"]})
+            if user:
+                health_score = user.get("health_score", 700) or 700
+                request["user_details"] = {
+                    "userID": user["userID"],
+                    "name": user["name"],
+                    "email": user.get("emailID", user.get("email", "")),
+                    "health_score": health_score,
+                    "score_category": get_score_category(health_score),
+                    "score_color": get_score_color(health_score),
+                    "score_last_updated": user.get("score_last_updated"),
+                    "dealership_name": user.get("dealershipName", "")
+                }
+            else:
+                request["user_details"] = {
+                    "userID": request["userID"],
+                    "name": "Unknown User",
+                    "email": "",
+                    "health_score": 700,
+                    "score_category": "Unknown",
+                    "score_color": "gray"
+                }
+        
+        # Enhanced: Enrich orders with user health scores and availability info
+        enriched_orders = []
+        for order in orders_list:
+            order["_id"] = str(order["_id"])
+            
+            # Get user details including health score
+            user = await db.users.find_one({"userID": order["userID"]})
+            if user:
+                health_score = user.get("health_score", 700)
+                order["user_details"] = {
+                    "userID": user["userID"],
+                    "name": user["name"],
+                    "email": user.get("emailID", user.get("email", "")),
+                    "health_score": health_score,
+                    "score_category": get_score_category(health_score),
+                    "score_color": get_score_color(health_score),
+                    "score_last_updated": user.get("score_last_updated"),
+                    "dealership_name": user.get("dealershipName", "")
+                }
+            else:
+                order["user_details"] = {
+                    "userID": order["userID"],
+                    "name": "Unknown User", 
+                    "email": "",
+                    "health_score": 700,
+                    "score_category": "Unknown",
+                    "score_color": "gray"
+                }
+            
+            # Check machine availability
+            availability_query = {
+                "machineType": {"$regex": order["machineType"], "$options": "i"},
+                "dealerID": dealership_id,
+                "status": {"$in": ["Ready"]},
+                "$or": [
+                    {"checkOutDate": None},
+                    {"checkInDate": None},
+                    {
+                        "$and": [
+                            {"checkInDate": {"$lte": order["checkInDate"]}},
+                            {"checkOutDate": {"$gte": order["checkOutDate"]}}
+                        ]
+                    }
+                ]
+            }
+            
+            available_machines = await db.machines.find(availability_query).to_list(length=None)
+            
+            # Add availability information
+            order["isAvailable"] = len(available_machines) > 0
+            order["availableCount"] = len(available_machines)
+            order["availableMachines"] = [
+                {
+                    "machineID": machine["machineID"],
+                    "machineType": machine["machineType"],
+                    "location": machine["location"],
+                    "status": machine["status"]
+                } for machine in available_machines
+            ]
+            
+            # Add request-like fields for unified handling
+            order["requestID"] = order.get("orderID", str(order["_id"]))
+            order["requestType"] = "NEW_ORDER"
+            order["requestDate"] = order.get("orderDate", order.get("createdAt"))
+            order["machineID"] = "N/A"
+            order["source"] = "newOrders"
+            
+            enriched_orders.append(order)
+        
+        # Combine both lists
+        combined_list = requests_list + enriched_orders
+        
+        # Sort combined list by date (newest first)
+        combined_list.sort(
+            key=lambda x: x.get("requestDate", x.get("orderDate", datetime.min)), 
+            reverse=True
+        )
+        
+        # Get summary statistics
+        total_items = len(combined_list)
+        pending_orders = sum(1 for item in enriched_orders if item["isAvailable"])
+        unavailable_orders = sum(1 for item in enriched_orders if not item["isAvailable"])
+        
+        # Health score statistics
+        users_with_excellent_scores = sum(
+            1 for item in combined_list 
+            if item.get("user_details", {}).get("health_score", 700) >= 750
+        )
+        users_with_poor_scores = sum(
+            1 for item in combined_list 
+            if item.get("user_details", {}).get("health_score", 700) < 550
+        )
+        
+        return APIResponse(
+            success=True,
+            message=f"Found {total_items} items ({len(requests_list)} requests, {len(enriched_orders)} pending orders)",
+            data={
+                "requests": combined_list,
+                "summary": {
+                    "total_items": total_items,
+                    "requests_count": len(requests_list),
+                    "orders_count": len(enriched_orders),
+                    "available_orders": pending_orders,
+                    "unavailable_orders": unavailable_orders,
+                    "users_excellent_score": users_with_excellent_scores,
+                    "users_poor_score": users_with_poor_scores
+                },
+                "filters": {
+                    "status": status,
+                    "request_type": request_type
+                }
+            }
+        )
+        
     except HTTPException:
         raise
     except Exception as e:
@@ -173,11 +398,12 @@ async def get_requests_and_orders(
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
 @router.post("/requests/{request_id}/approve", response_model=APIResponse)
-async def approve_request(
+async def approve_request_with_score_check(
     request_id: str,
     approval_data: dict,
     current_user: dict = Depends(get_current_user)
 ):
+    """Enhanced request approval with health score consideration"""
     try:
         if current_user["role"] != "admin":
             raise HTTPException(status_code=403, detail="Admin access required")
@@ -185,147 +411,157 @@ async def approve_request(
         dealership_id = current_user["dealershipID"]
         current_time = datetime.utcnow()
         
-        # Check if this is a request from requests table or newOrders table
-        request_doc = None
-        order_doc = None
-        source_type = None
-        
-        # Try to find in requests table first
+        # Find the request
         request_doc = await db.requests.find_one({"requestID": request_id})
-        approval_data['date'] = request_doc.get("date") if request_doc else None
-        print(approval_data)
-        if request_doc:
-            source_type = "request"
-        else:
+        order_doc = None
+        
+        if not request_doc:
             # Try to find in newOrders table
-            order_doc = await db.neworders.find_one({"orderID": request_id})
-            if order_doc:
-                source_type = "order"
+            try:
+                order_doc = await db.neworders.find_one({"_id": ObjectId(request_id)})
+                if not order_doc:
+                    raise HTTPException(status_code=404, detail="Request not found")
+            except:
+                raise HTTPException(status_code=404, detail="Request not found")
         
-        if not request_doc and not order_doc:
-            raise HTTPException(status_code=404, detail="Request not found")
+        # Get user details and health score
+        user_id = request_doc["userID"] if request_doc else order_doc["userID"]
+        user = await db.users.find_one({"userID": user_id})
         
-        # Handle based on source type
-        if source_type == "request":
-            return await handle_request_approval(request_doc, approval_data, dealership_id, current_time)
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        health_score = user.get("health_score", 700)
+        
+        # Health score warnings for admin consideration
+        score_warnings = []
+        if health_score < 400:
+            score_warnings.append("CRITICAL: User has very poor health score - consider extra monitoring")
+        elif health_score < 550:
+            score_warnings.append("WARNING: User has poor health score - consider additional terms")
+        elif health_score >= 750:
+            score_warnings.append("EXCELLENT: User has excellent score - eligible for premium terms")
+        
+        # Handle different types of requests
+        if request_doc:
+            # Regular request approval
+            result = await handle_request_approval(request_doc, approval_data, dealership_id, current_time)
         else:
-            return await handle_order_approval(order_doc, approval_data, dealership_id, current_time)
-            
+            # New order approval
+            result = await handle_order_approval(order_doc, approval_data, dealership_id, current_time)
+        
+        # Add health score info to response
+        result.data = result.data or {}
+        result.data.update({
+            "user_health_score": health_score,
+            "score_category": get_score_category(health_score),
+            "score_warnings": score_warnings
+        })
+        
+        return result
+        
     except HTTPException:
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
-
 async def handle_request_approval(request_doc, approval_data, dealership_id, current_time):
-    """Handle approval of requests from requests table"""
-    request_type = request_doc.get("requestType", "").upper()
-    machine_id = request_doc.get("machineID")
+    """Handle approval of regular requests"""
+    
+    # Verify machine belongs to this dealership
+    machine = await db.machines.find_one({
+        "machineID": request_doc["machineID"],
+        "dealerID": dealership_id
+    })
+    
+    if not machine:
+        raise HTTPException(status_code=403, detail="Machine not under your dealership")
+    
+    # Update request status
+    update_data = {
+        "status": "Approved",
+        "adminComments": approval_data.get("notes", "Request approved"),
+        "updatedAt": current_time
+    }
     
     # Handle different request types
-    if request_type == "SUPPORT":
-        # Support requests: just mark as approved
-        await db.requests.update_one(
-            {"_id": request_doc["_id"]},
-            {"$set": {
-                "status": "COMPLETED",
-                "adminComments": approval_data.get("notes", "Support request approved"),
-                "updatedAt": current_time
-            }}
-        )
-        
-        return APIResponse(
-            success=True,
-            message="Support request approved successfully",
-            data={"request_id": request_doc["requestID"], "type": "support"}
-        )
+    request_type = request_doc.get("requestType", "")
     
-    elif request_type == "EXTENSION":
-        # Extension requests: update machine check-in date
-        extension_date = approval_data.get("date")
-        print(extension_date)
-        if not extension_date:
-            raise HTTPException(status_code=400, detail="Extension date is required")
-        
-        # Update machine check-in date
-        await db.machines.update_one(
-            {"machineID": machine_id},
-            {"$set": {
-                "checkInDate": extension_date,
-                "updatedAt": current_time
-            }}
-        )
-        
-        # Update request status
-        await db.requests.update_one(
-            {"_id": request_doc["_id"]},
-            {"$set": {
-                "status": "COMPLETED",
-                "adminComments": f"Extension approved until {extension_date.strftime('%Y-%m-%d')}",
-                "updatedAt": current_time
-            }}
-        )
-        
-        return APIResponse(
-            success=True,
-            message=f"Extension approved until {extension_date.strftime('%Y-%m-%d')}",
-            data={
-                "request_id": request_doc["requestID"], 
-                "type": "extension",
-                "new_checkin_date": extension_date.isoformat()
-            }
-        )
+    if request_type == "Extension":
+        # Handle extension request
+        new_checkout_date = approval_data.get("new_checkout_date")
+        if new_checkout_date:
+            await db.machines.update_one(
+                {"machineID": request_doc["machineID"]},
+                {"$set": {"checkOutDate": new_checkout_date, "updatedAt": current_time}}
+            )
+            update_data["newCheckoutDate"] = new_checkout_date
     
-    elif request_type == "CANCELLATION":
-        # Cancellation requests: mark machine as returned and available
-        extension_date = approval_data.get("date")
-        await db.machines.update_one(
-            {"machineID": machine_id},
-            {"$set": {
-                "checkInDate": extension_date,
-                "status": "READY",
-                "userID": None,
-                "siteID": None,
-                "updatedAt": current_time
-            }}
-        )
-        
-        # Update request status
-        await db.requests.update_one(
-            {"_id": request_doc["_id"]},
-            {"$set": {
-                "status": "COMPLETED",
-                "adminComments": f"Cancellation approved, machine returned on {extension_date.strftime('%Y-%m-%d')}",
-                "updatedAt": current_time
-            }}
-        )
-        
-        return APIResponse(
-            success=True,
-            message="Cancellation approved, machine marked as available",
-            data={
-                "request_id": request_doc["requestID"], 
-                "type": "cancellation",
-                "return_date": current_time.isoformat()
-            }
-        )
+    await db.requests.update_one(
+        {"requestID": request_doc["requestID"]},
+        {"$set": update_data}
+    )
     
-    else:
-        # Generic approval for other request types
-        await db.requests.update_one(
-            {"_id": request_doc["_id"]},
-            {"$set": {
-                "status": "COMPLETED",
-                "adminComments": approval_data.get("notes", "Request approved"),
-                "updatedAt": current_time
-            }}
-        )
-        
-        return APIResponse(
-            success=True,
-            message="Request approved successfully",
-            data={"request_id": request_doc["requestID"], "type": "general"}
-        )
+    return APIResponse(
+        success=True,
+        message=f"{request_type} request approved successfully",
+        data={
+            "request_id": request_doc["requestID"],
+            "type": "request",
+            "request_type": request_type
+        }
+    )
+
+async def handle_order_approval(order_doc, approval_data, dealership_id, current_time):
+    """Handle approval of new orders"""
+    
+    machine_id = approval_data.get("assigned_machine_id")
+    if not machine_id:
+        raise HTTPException(status_code=400, detail="Machine ID is required for order approval")
+    
+    # Verify machine exists and is available
+    machine = await db.machines.find_one({
+        "machineID": machine_id,
+        "dealerID": dealership_id,
+        "status": {"$in": ["Ready"]}
+    })
+    
+    if not machine:
+        raise HTTPException(status_code=400, detail="Machine not available for assignment")
+    
+    # Assign machine to user
+    await db.machines.update_one(
+        {"machineID": machine_id, "dealerID": dealership_id},
+        {"$set": {
+            "userID": order_doc.get("userID"),
+            "siteID": order_doc.get("siteID"),
+            "checkOutDate": order_doc.get("checkOutDate"),
+            "checkInDate": order_doc.get("checkInDate"),
+            "status": "Occupied",
+            "updatedAt": current_time
+        }}
+    )
+    
+    # Update order status
+    await db.neworders.update_one(
+        {"_id": order_doc["_id"]},
+        {"$set": {
+            "status": "Approved",
+            "assignedMachineID": machine_id,
+            "adminComments": approval_data.get("notes", f"Order approved, machine {machine_id} assigned"),
+            "updatedAt": current_time
+        }}
+    )
+    
+    return APIResponse(
+        success=True,
+        message=f"Order approved and machine {machine_id} assigned",
+        data={
+            "order_id": order_doc.get("orderID", str(order_doc["_id"])),
+            "type": "new_order",
+            "assigned_machine": machine_id
+        }
+    )
 
 
 @router.post("/requests/{request_id}/reject", response_model=APIResponse)

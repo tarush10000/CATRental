@@ -518,3 +518,34 @@ async def get_analytics(current_user: dict = Depends(get_current_user)):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+    
+@router.get("/users", response_model=APIResponse)
+async def get_users(current_user: dict = Depends(get_current_user)):
+    """Get all users with default health scores"""
+    try:
+        if current_user["role"] != "admin":
+            raise HTTPException(status_code=403, detail="Admin access required")
+        
+        # Get all customer users (not just from this dealership)
+        users = await db.users.find({
+            "role": "customer"  # Only get customers
+        }).to_list(length=None)
+        
+        # Add default health score if missing
+        for user in users:
+            user["_id"] = str(user["_id"])
+            if user.get("health_score") is None:
+                user["health_score"] = 700
+            if user.get("score_last_updated") is None:
+                user["score_last_updated"] = user.get("createdAt")
+        
+        return APIResponse(
+            success=True,
+            message=f"Found {len(users)} users",
+            data={"users": users}
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")

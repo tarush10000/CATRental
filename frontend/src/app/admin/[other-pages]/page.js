@@ -4,6 +4,9 @@ import { useState, useEffect, useRef } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter, useParams } from 'next/navigation'
 import Layout from '@/components/Layout'
+import HealthScoreManagement from '@/components/admin/HealthScoreManagement'
+import AdminRecommendations from '@/components/admin/AdminRecommendations'
+
 import {
     Truck, Plus, FileText, MessageSquare, Settings,
     TrendingUp, Wrench, Activity, Clock, CheckCircle,
@@ -32,6 +35,8 @@ export default function AdminOtherPages() {
             case 'add-machine':
             case 'add-order':
             case 'requests':
+            case 'recommendations':
+            case 'health-scores':
                 break
             default:
                 // Redirect to dashboard if unknown page
@@ -71,6 +76,10 @@ export default function AdminOtherPages() {
                 return <AddOrder session={session} />
             case 'requests':
                 return <ManageRequests session={session} />
+            case 'recommendations':
+                return <AdminRecommendations session={session} />
+            case 'health-scores':
+                return <HealthScoreManagement session={session} />
             default:
                 return (
                     <div className="empty-state">

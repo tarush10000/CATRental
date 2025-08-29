@@ -57,7 +57,8 @@ const Layout = ({ children }) => {
         { name: 'Assign Machine', href: '/admin/add-order', icon: FileText },
         { name: 'Manage Requests', href: '/admin/requests', icon: MessageSquare },
         { name: 'Smart Recommendations', href: '/admin/recommendations', icon: Brain },
-        { name: 'Settings', href: '/admin/settings', icon: Settings },
+        { name: 'Health Scores', href: '/admin/health-scores', icon: Lightbulb },
+        // { name: 'Settings', href: '/admin/settings', icon: Settings },
     ];
 
     const customerNavItems = [
@@ -66,6 +67,7 @@ const Layout = ({ children }) => {
         { name: 'My Machines', href: '/customer/machines', icon: Truck },
         { name: 'Smart Recommendations', href: '/customer/recommendations', icon: Lightbulb },
         { name: 'Orders', href: '/customer/order', icon: FileText },
+        { name: 'My Health Score', href: '/customer/my-health-score', icon: Brain },
     ];
 
     const navItems = isAdmin ? adminNavItems : customerNavItems;

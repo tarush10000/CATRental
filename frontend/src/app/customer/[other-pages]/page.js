@@ -71,7 +71,9 @@ export default function CustomerOtherPages() {
             // case 'create-request':
             //     return <CreateRequest />
             case 'recommendations':
-                return <Recommendations />
+                return <CustomerRecommendations />
+            case 'my-health-score':
+                return <CustomerHealthScore />
             default:
                 return <div>Page not found. Redirecting...</div>
         }
