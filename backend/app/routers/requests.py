@@ -247,22 +247,11 @@ async def handle_request_approval(request_doc, approval_data, dealership_id, cur
         if not extension_date:
             raise HTTPException(status_code=400, detail="Extension date is required")
         
-        try:
-            print(type(extension_date))
-            new_checkin_date = datetime.strptime(extension_date, "%Y-%m-%d %H:%M:%S")
-            print(new_checkin_date)
-            
-            print("hi")
-            # new_checkin_date = datetime.fromisoformat(extension_date.replace('Z', '+00:00'))
-            print("heelo")
-        except ValueError:
-            raise HTTPException(status_code=400, detail="Invalid extension date format")
-        print("hello")
         # Update machine check-in date
         await db.machines.update_one(
             {"machineID": machine_id},
             {"$set": {
-                "checkInDate": new_checkin_date,
+                "checkInDate": extension_date,
                 "updatedAt": current_time
             }}
         )
@@ -272,27 +261,28 @@ async def handle_request_approval(request_doc, approval_data, dealership_id, cur
             {"_id": request_doc["_id"]},
             {"$set": {
                 "status": "COMPLETED",
-                "adminComments": f"Extension approved until {new_checkin_date.strftime('%Y-%m-%d')}",
+                "adminComments": f"Extension approved until {extension_date.strftime('%Y-%m-%d')}",
                 "updatedAt": current_time
             }}
         )
         
         return APIResponse(
             success=True,
-            message=f"Extension approved until {new_checkin_date.strftime('%Y-%m-%d')}",
+            message=f"Extension approved until {extension_date.strftime('%Y-%m-%d')}",
             data={
                 "request_id": request_doc["requestID"], 
                 "type": "extension",
-                "new_checkin_date": new_checkin_date.isoformat()
+                "new_checkin_date": extension_date.isoformat()
             }
         )
     
     elif request_type == "CANCELLATION":
         # Cancellation requests: mark machine as returned and available
+        extension_date = approval_data.get("date")
         await db.machines.update_one(
             {"machineID": machine_id},
             {"$set": {
-                "checkInDate": current_time,
+                "checkInDate": extension_date,
                 "status": "READY",
                 "userID": None,
                 "siteID": None,
@@ -305,7 +295,7 @@ async def handle_request_approval(request_doc, approval_data, dealership_id, cur
             {"_id": request_doc["_id"]},
             {"$set": {
                 "status": "COMPLETED",
-                "adminComments": f"Cancellation approved, machine returned on {current_time.strftime('%Y-%m-%d')}",
+                "adminComments": f"Cancellation approved, machine returned on {extension_date.strftime('%Y-%m-%d')}",
                 "updatedAt": current_time
             }}
         )
