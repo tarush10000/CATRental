@@ -30,11 +30,38 @@ class OrderStatus(str, Enum):
     IN_PROGRESS = "InProgress"
     COMPLETED = "Completed"
 
+class Recommendation(BaseModel):
+    type: str
+    title: str
+    description: str
+    priority: str
+    suggested_action: str
+
+class TransferStatus(str, Enum):
+    PENDING = "pending"
+    APPROVED = "approved" 
+    DECLINED = "declined"
+
+class RecommendationType(str, Enum):
+    TRANSFER_OPTIMIZATION = "transfer_optimization"
+    MAINTENANCE = "maintenance"
+    EFFICIENCY = "efficiency"
+    COST_SAVING = "cost_saving"
+    USAGE_PATTERN = "usage_pattern"
+
+class RecommendationSeverity(str, Enum):
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+    CRITICAL = "critical"
+
 # User Models
 class UserBase(BaseModel):
     email: EmailStr
     name: str
     role: UserRole
+    health_score: Optional[int] = Field(default=700, ge=300, le=850)  # Credit score equivalent
+    score_last_updated: Optional[datetime] = None
 
 class UserCreate(UserBase):
     password: str
@@ -189,40 +216,15 @@ class MachineUsageStats(BaseModel):
     idle_percentage: float
     efficiency_score: float
 
-# Recommendation Models
-class Recommendation(BaseModel):
-    type: str
-    title: str
-    description: str
-    priority: str
-    suggested_action: str
-
-class TransferStatus(str, Enum):
-    PENDING = "pending"
-    APPROVED = "approved" 
-    DECLINED = "declined"
-
-class RecommendationType(str, Enum):
-    TRANSFER_OPTIMIZATION = "transfer_optimization"
-    MAINTENANCE = "maintenance"
-    EFFICIENCY = "efficiency"
-    COST_SAVING = "cost_saving"
-    USAGE_PATTERN = "usage_pattern"
-
-class RecommendationSeverity(str, Enum):
-    LOW = "low"
-    MEDIUM = "medium"
-    HIGH = "high"
-    CRITICAL = "critical"
-
 # Transfer Models
 class TransferBase(BaseModel):
-    user_id_1: str  # Current user
-    user_id_2: str  # Requesting user
-    dealer_id: str
-    location_1: str  # Current location
-    location_2: str  # Requested location
+    order_id: str
     machine_id: str
+    dealer_id: str
+    user_id_1: str
+    user_id_2: str
+    location_1: dict
+    location_2: dict
     estimated_savings: Optional[float] = None
     recommendation_reason: Optional[str] = None
 
@@ -265,6 +267,23 @@ class RecommendationModel(RecommendationBase):
     class Config:
         from_attributes = True
 
+class TransferRecommendation(BaseModel):
+    from_user_id: str
+    to_user_id: str
+    machine_id: str
+    estimated_savings: float
+    distance_saved: float
+    reason: str
+    priority: str  # "high", "medium", "low"
+
+class UsageRecommendation(BaseModel):
+    user_id: str
+    recommendation_type: str  # "reduce_machines", "increase_machines", "optimize_usage"
+    current_utilization: float
+    recommended_action: str
+    potential_savings: Optional[float] = None
+    affected_machines: List[str]
+
 # Enhanced Machine Location Model (using existing machine data)
 class MachineLocation(BaseModel):
     machine_id: str
@@ -282,3 +301,28 @@ class MachineLocation(BaseModel):
     check_out_date: Optional[datetime] = None
     check_in_date: Optional[datetime] = None
     last_updated: datetime
+    
+# Health Score Models
+class HealthScoreUpdate(BaseModel):
+    user_id: str
+    old_score: int
+    new_score: int
+    delta: int
+    reason: str
+    average_utilization: float
+    affected_machines: List[str]
+
+class HealthScoreResponse(BaseModel):
+    user_id: str
+    current_score: int
+    score_category: str  # "Excellent", "Good", "Fair", "Poor"
+    last_updated: datetime
+    recommendations: List[str]
+    
+class NewOrderForm(BaseModel):
+    machine_type: str = Field(..., example="Excavator")
+    quantity: int = Field(..., gt=0, example=2)
+    location_lat: float = Field(..., ge=-90, le=90)
+    location_lon: float = Field(..., ge=-180, le=180)
+    check_in_date: datetime
+    check_out_date: datetime

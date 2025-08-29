@@ -4372,3 +4372,82 @@ a {
         border-radius: 0;
     }
 }
+
+/* Health Score Card Styles */
+.health-score-card {
+    background: white;
+    border-radius: 12px;
+    padding: 16px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.score-excellent {
+    color: #16a085 !important;
+    background-color: #e8f8f5 !important;
+    border-color: #16a085 !important;
+}
+
+.score-good {
+    color: #2980b9 !important;
+    background-color: #ebf3fd !important;
+    border-color: #2980b9 !important;
+}
+
+.score-fair {
+    color: #f39c12 !important;
+    background-color: #fef9e7 !important;
+    border-color: #f39c12 !important;
+}
+
+.score-poor {
+    color: #e74c3c !important;
+    background-color: #fdeaea !important;
+    border-color: #e74c3c !important;
+}
+
+/* Request Type Badge Styles */
+.request-type-badge {
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.request-type-badge.extension {
+    background: #e3f2fd;
+    color: #1565c0;
+}
+
+.request-type-badge.support {
+    background: #fff3e0;
+    color: #ef6c00;
+}
+
+.request-type-badge.cancellation {
+    background: #ffebee;
+    color: #c62828;
+}
+
+.request-type-badge.new_order {
+    background: #e8f5e8;
+    color: #2e7d32;
+}
+
+/* Button Styles */
+.btn-success-sm {
+    padding: 8px 12px;
+    background: #28a745;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    transition: background-color 0.2s;
+}
+
+.btn-success-sm:hover {
+    background: #218838;
+}
