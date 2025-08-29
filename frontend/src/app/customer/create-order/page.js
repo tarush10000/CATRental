@@ -6,47 +6,73 @@ import { useRouter } from 'next/navigation'
 import Head from 'next/head'
 import Layout from '@/components/Layout'
 import {
-    Package, Truck, MapPin, Calendar, MessageSquare, Send, 
-    RefreshCw, AlertTriangle, CheckCircle, Info, 
+    Package, Truck, MapPin, Calendar, MessageSquare, Send,
+    RefreshCw, AlertTriangle, CheckCircle, Info,
     ArrowLeft, Clock, Building2, Target
 } from 'lucide-react'
 import { get } from 'http'
+import VoiceInput from '@/components/VoiceInput'
+
+const processVoiceInput = async (transcript) => {
+  try {
+    const response = await fetch('/api/gemini', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        transcript,
+        formFields: ['machineType', 'description', 'priority', 'location']
+      })
+    })
+    
+    const result = await response.json()
+    if (result.success) {
+      setFormData(prev => ({
+        ...prev,
+        ...Object.fromEntries(
+          Object.entries(result.data).filter(([key, value]) => value !== '')
+        )
+      }))
+    }
+  } catch (error) {
+    console.error('Error processing voice input:', error)
+  }
+}
 
 async function getCoordinates(cityName) {
-  const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(cityName)}`;
-  
-  try {
-    const response = await fetch(url, {
-      headers: {
-        "User-Agent": "my_app/1.0 (your_email@example.com)", // required by Nominatim
-        "Accept-Language": "en"
-      }
-    });
+    const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(cityName)}`;
 
-    if (!response.ok) {
-      throw new Error(`HTTP error! Status: ${response.status}`);
+    try {
+        const response = await fetch(url, {
+            headers: {
+                "User-Agent": "my_app/1.0 (your_email@example.com)", // required by Nominatim
+                "Accept-Language": "en"
+            }
+        });
+
+        if (!response.ok) {
+            throw new Error(`HTTP error! Status: ${response.status}`);
+        }
+
+        const data = await response.json();
+        if (!data || data.length === 0) {
+            throw new Error(`No coordinates found for "${cityName}"`);
+        }
+
+        // ✅ Always pick the first result
+        const firstResult = data[0];
+        const { lat, lon } = firstResult;
+
+        return `${lat},${lon}`;
+    } catch (error) {
+        console.error("Error fetching coordinates:", error.message);
+        throw error;
     }
-
-    const data = await response.json();
-    if (!data || data.length === 0) {
-      throw new Error(`No coordinates found for "${cityName}"`);
-    }
-
-    // ✅ Always pick the first result
-    const firstResult = data[0];
-    const { lat, lon } = firstResult;
-
-    return `${lat},${lon}`;
-  } catch (error) {
-    console.error("Error fetching coordinates:", error.message);
-    throw error;
-  }
 }
 
 export default function CreateOrderPage() {
     const { data: session, status } = useSession()
     const router = useRouter()
-    
+
     const [machineTypes, setMachineTypes] = useState([])
     const [loading, setLoading] = useState(true)
     const [submitting, setSubmitting] = useState(false)
@@ -98,21 +124,21 @@ export default function CreateOrderPage() {
 
     const validateForm = () => {
         const newErrors = {}
-        
+
         if (!formData.machineType) {
             newErrors.machineType = 'Please select a machine type'
         }
-        
+
         if (!formData.location.trim()) {
             newErrors.location = 'Please provide a location'
         }
-        
+
         if (!formData.siteID.trim()) {
             newErrors.siteID = 'Please provide a site ID'
         } else if (!/^[A-Za-z0-9-]+$/.test(formData.siteID)) {
             newErrors.siteID = 'Site ID can only contain letters, numbers, and hyphens'
         }
-        
+
         if (!formData.checkInDate) {
             newErrors.checkInDate = 'Please select a check-in date'
         } else {
@@ -122,7 +148,7 @@ export default function CreateOrderPage() {
                 newErrors.checkInDate = 'Check-in date must be in the future'
             }
         }
-        
+
         if (!formData.checkOutDate) {
             newErrors.checkOutDate = 'Please select a check-out date'
         } else if (formData.checkInDate && formData.checkOutDate) {
@@ -131,7 +157,7 @@ export default function CreateOrderPage() {
             if (checkOutDate <= checkInDate) {
                 newErrors.checkOutDate = 'Check-out date must be after check-in date'
             }
-            
+
             // Minimum rental period check (1 day)
             const diffTime = checkOutDate - checkInDate
             const diffDays = diffTime / (1000 * 60 * 60 * 24)
@@ -146,7 +172,7 @@ export default function CreateOrderPage() {
 
     const handleSubmit = async (e) => {
         e.preventDefault()
-        
+
         if (!validateForm()) return
 
         setSubmitting(true)
@@ -207,8 +233,8 @@ export default function CreateOrderPage() {
                     const daysToAdd = parseInt(value)
                     const checkOutDate = new Date(checkInDate)
                     checkOutDate.setDate(checkInDate.getDate() + daysToAdd)
-                    setFormData(prev => ({ 
-                        ...prev, 
+                    setFormData(prev => ({
+                        ...prev,
                         duration: value,
                         checkOutDate: checkOutDate.toISOString().split('T')[0]
                     }))
@@ -221,8 +247,8 @@ export default function CreateOrderPage() {
                     const daysToAdd = parseInt(formData.duration)
                     const checkOutDate = new Date(checkInDate)
                     checkOutDate.setDate(checkInDate.getDate() + daysToAdd)
-                    setFormData(prev => ({ 
-                        ...prev, 
+                    setFormData(prev => ({
+                        ...prev,
                         checkInDate: value,
                         checkOutDate: checkOutDate.toISOString().split('T')[0]
                     }))
@@ -279,13 +305,13 @@ export default function CreateOrderPage() {
                                 {orderDetails?.message || 'Your equipment order has been submitted and is pending approval from our team.'}
                             </p>
                             <div className="success-actions">
-                                <button 
+                                <button
                                     onClick={() => router.push('/customer/dashboard')}
                                     className="btn-modern btn-primary-modern"
                                 >
                                     Back to Dashboard
                                 </button>
-                                <button 
+                                <button
                                     onClick={() => router.push('/customer/orders')}
                                     className="btn-modern btn-secondary-modern"
                                 >
@@ -313,7 +339,7 @@ export default function CreateOrderPage() {
                         <div className="page-header">
                             <div className="header-content">
                                 <div className="header-left">
-                                    <button 
+                                    <button
                                         onClick={() => router.back()}
                                         className="back-btn"
                                     >
@@ -340,8 +366,7 @@ export default function CreateOrderPage() {
                                     <p className="card-subtitle">Please provide complete information for your equipment order</p>
                                 </div>
 
-                                <div className="card-content">
-                                    {/* Error Alert */}
+                                <div className="card-content">                                    {/* Error Alert */}
                                     {errors.submit && (
                                         <div className="alert alert-error">
                                             <AlertTriangle size={16} />
@@ -483,8 +508,8 @@ export default function CreateOrderPage() {
                                                 className={`form-input ${errors.checkOutDate ? 'form-input-error' : ''}`}
                                                 value={formData.checkOutDate}
                                                 onChange={(e) => handleInputChange('checkOutDate', e.target.value)}
-                                                min={formData.checkInDate ? 
-                                                    new Date(new Date(formData.checkInDate).getTime() + 86400000).toISOString().split('T')[0] : 
+                                                min={formData.checkInDate ?
+                                                    new Date(new Date(formData.checkInDate).getTime() + 86400000).toISOString().split('T')[0] :
                                                     new Date(Date.now() + 172800000).toISOString().split('T')[0] // Day after tomorrow
                                                 }
                                                 disabled={submitting || formData.duration !== 'custom'}

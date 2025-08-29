@@ -12,6 +12,32 @@ import {
 } from 'lucide-react'
 import CustomerHealthScore from '@/components/customer/CustomerHealthScore'
 import CustomerRecommendations from '@/components/customer/CustomerRecommendations'
+import VoiceInput from '@/components/VoiceInput'
+
+const processVoiceInput = async (transcript) => {
+    try {
+        const response = await fetch('/api/gemini', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                transcript,
+                formFields: ['machineType', 'description', 'priority', 'location']
+            })
+        })
+
+        const result = await response.json()
+        if (result.success) {
+            setFormData(prev => ({
+                ...prev,
+                ...Object.fromEntries(
+                    Object.entries(result.data).filter(([key, value]) => value !== '')
+                )
+            }))
+        }
+    } catch (error) {
+        console.error('Error processing voice input:', error)
+    }
+}
 
 export default function CustomerOtherPages() {
     const { data: session, status } = useSession()
@@ -29,8 +55,8 @@ export default function CustomerOtherPages() {
 
         // Handle routing to correct pages based on the dynamic route
         const page = params['other-pages']
-        
-        switch(page) {
+
+        switch (page) {
             case 'machines':
                 // This would be handled by a dedicated machines page
                 break
@@ -70,7 +96,7 @@ export default function CustomerOtherPages() {
 
     // Render different content based on the page
     const renderPageContent = () => {
-        switch(page) {
+        switch (page) {
             case 'machines':
                 return <CustomerMachines />
             // case 'create-request':
@@ -164,6 +190,7 @@ function CreateRequest() {
             </div>
 
             <div className="bg-white rounded-lg shadow p-6 max-w-2xl">
+                <VoiceInput onProcessVoice={processVoiceInput} className="mb-6" />
                 <form onSubmit={handleSubmit} className="space-y-6">
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -265,7 +292,7 @@ function Recommendations() {
     ]
 
     const getPriorityColor = (priority) => {
-        switch(priority) {
+        switch (priority) {
             case 'high': return 'text-red-600 bg-red-100'
             case 'medium': return 'text-yellow-600 bg-yellow-100'
             case 'low': return 'text-green-600 bg-green-100'
@@ -274,7 +301,7 @@ function Recommendations() {
     }
 
     const getPriorityIcon = (priority) => {
-        switch(priority) {
+        switch (priority) {
             case 'high': return <AlertTriangle className="h-5 w-5" />
             case 'medium': return <Clock className="h-5 w-5" />
             case 'low': return <CheckCircle className="h-5 w-5" />
@@ -310,9 +337,9 @@ function Recommendations() {
                                 </div>
                             </div>
                         </div>
-                        
+
                         <p className="text-gray-600 mb-4">{rec.description}</p>
-                        
+
                         <div className="bg-blue-50 border-l-4 border-blue-400 p-4">
                             <div className="flex items-center">
                                 <Lightbulb className="h-5 w-5 text-blue-400 mr-2" />
