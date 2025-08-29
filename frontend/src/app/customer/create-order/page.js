@@ -152,7 +152,7 @@ export default function CreateOrderPage() {
         setSubmitting(true)
         setErrors({})
 
-        const loc = getCoordinates(formData.location.trim())
+        const loc = await getCoordinates(formData.location.trim())
 
         try {
             const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/customer/orders`, {
