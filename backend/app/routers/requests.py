@@ -418,7 +418,7 @@ async def approve_request_with_score_check(
         if not request_doc:
             # Try to find in newOrders table
             try:
-                order_doc = await db.neworders.find_one({"_id": ObjectId(request_id)})
+                order_doc = await db.neworders.find_one({"orderID": request_id})
                 if not order_doc:
                     raise HTTPException(status_code=404, detail="Request not found")
             except:

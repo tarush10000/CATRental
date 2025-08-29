@@ -10,6 +10,8 @@ import {
     Truck, Plus, FileText, MessageSquare, Lightbulb,
     TrendingUp, Clock, CheckCircle, AlertTriangle, Activity, Package
 } from 'lucide-react'
+import CustomerHealthScore from '@/components/customer/CustomerHealthScore'
+import CustomerRecommendations from '@/components/customer/CustomerRecommendations'
 
 export default function CustomerOtherPages() {
     const { data: session, status } = useSession()
@@ -37,6 +39,9 @@ export default function CustomerOtherPages() {
                 break
             case 'recommendations':
                 // This would be handled by a dedicated recommendations page
+                break
+            case 'my-health-score':
+                // This would be handled by a dedicated my-health-score page
                 break
             default:
                 // Redirect to dashboard if unknown page

@@ -196,30 +196,79 @@ async def get_recent_machines(current_user: dict = Depends(get_current_user)):
         if current_user["role"] != "admin":
             raise HTTPException(status_code=403, detail="Admin access required")
         
-        cursor = db.machines.find(
-            {"dealerID": current_user["dealershipID"]}
-        ).sort("updatedAt", -1).limit(10)
+        # Debug: Check if dealershipID exists
+        dealer_id = current_user.get("dealershipID")
+        if not dealer_id:
+            raise HTTPException(
+                status_code=400, 
+                detail="Dealership ID not found for user. Please check user registration."
+            )
         
-        machines = await cursor.to_list(length=10)
+        print(f"DEBUG: Looking for machines with dealerID: {dealer_id}")
+        
+        try:
+            cursor = db.machines.find(
+                {"dealerID": dealer_id}
+            ).sort("updatedAt", -1).limit(10)
+            
+            machines = await cursor.to_list(length=10)
+            print(f"DEBUG: Found {len(machines)} machines")
+            
+        except Exception as db_error:
+            print(f"DEBUG: Database error: {str(db_error)}")
+            raise HTTPException(
+                status_code=500, 
+                detail=f"Database query failed: {str(db_error)}"
+            )
         
         # Convert ObjectId to string and format data
+        formatted_machines = []
         for machine in machines:
-            machine["_id"] = str(machine["_id"])
-            if "updatedAt" in machine and isinstance(machine["updatedAt"], datetime):
-                machine["updatedAt"] = machine["updatedAt"].isoformat()
-            if "createdAt" in machine and isinstance(machine["createdAt"], datetime):
-                machine["createdAt"] = machine["createdAt"].isoformat()
+            try:
+                machine["_id"] = str(machine["_id"])
+                
+                # Safely handle datetime conversion
+                if "updatedAt" in machine:
+                    if isinstance(machine["updatedAt"], datetime):
+                        machine["updatedAt"] = machine["updatedAt"].isoformat()
+                    elif machine["updatedAt"] is None:
+                        machine["updatedAt"] = datetime.utcnow().isoformat()
+                
+                if "createdAt" in machine:
+                    if isinstance(machine["createdAt"], datetime):
+                        machine["createdAt"] = machine["createdAt"].isoformat()
+                    elif machine["createdAt"] is None:
+                        machine["createdAt"] = datetime.utcnow().isoformat()
+                
+                # Ensure required fields exist
+                machine.setdefault("machineID", "Unknown")
+                machine.setdefault("machineType", "Unknown")
+                machine.setdefault("status", "Unknown")
+                machine.setdefault("location", "Unknown")
+                
+                formatted_machines.append(machine)
+                
+            except Exception as format_error:
+                print(f"DEBUG: Error formatting machine {machine.get('_id', 'unknown')}: {str(format_error)}")
+                continue
         
         return APIResponse(
             success=True,
-            message="Recent machines retrieved successfully",
-            data=machines
+            message=f"Recent machines retrieved successfully. Found {len(formatted_machines)} machines.",
+            data={"machines": formatted_machines}
         )
         
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+        print(f"DEBUG: Unexpected error: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=500, 
+            detail=f"Internal server error: {str(e)}"
+        )
+        
 
 @router.get("/requests/recent", response_model=APIResponse)
 async def get_recent_requests(current_user: dict = Depends(get_current_user)):

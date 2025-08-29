@@ -1,170 +1,284 @@
-import React, { useState, useEffect } from 'react';
-import { recommendationsAPI } from '../../services/recommendationsAPI';
-import { Truck, DollarSign, MapPin, Users } from 'lucide-react';
+'use client'
 
-const TransferOptimization = ({ token }) => {
-    const [recommendations, setRecommendations] = useState([]);
-    const [loading, setLoading] = useState(true);
-    const [totalSavings, setTotalSavings] = useState(0);
+import { useState, useEffect } from 'react'
+import { 
+    Truck, CheckCircle, XCircle, Clock, User, Calendar, 
+    MapPin, DollarSign, AlertTriangle 
+} from 'lucide-react'
+
+export default function TransferOptimization({ token }) {
+    const [transfers, setTransfers] = useState([])
+    const [loading, setLoading] = useState(true)
+    const [statusFilter, setStatusFilter] = useState('all')
 
     useEffect(() => {
-        fetchTransferRecommendations();
-    }, []);
+        fetchTransfers()
+        
+        // Listen for refresh events
+        const handleRefresh = () => fetchTransfers()
+        window.addEventListener('refreshRecommendations', handleRefresh)
+        
+        return () => {
+            window.removeEventListener('refreshRecommendations', handleRefresh)
+        }
+    }, [statusFilter])
 
-    const fetchTransferRecommendations = async () => {
+    const fetchTransfers = async () => {
         try {
-            setLoading(true);
-            const response = await recommendationsAPI.getTransferOptimization(100, token);
-            if (response.success) {
-                setRecommendations(response.data.recommendations);
-                setTotalSavings(response.data.total_potential_savings);
+            setLoading(true)
+            const url = statusFilter !== 'all' 
+                ? `${process.env.NEXT_PUBLIC_API_URL}/api/recommendations/transfers?status=${statusFilter}`
+                : `${process.env.NEXT_PUBLIC_API_URL}/api/recommendations/transfers`
+            
+            const response = await fetch(url, {
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                },
+            })
+            
+            if (response.ok) {
+                const data = await response.json()
+                if (data.success) {
+                    setTransfers(data.data?.transfers || [])
+                }
             }
         } catch (error) {
-            console.error('Error fetching transfer recommendations:', error);
+            console.error('Error fetching transfers:', error)
         } finally {
-            setLoading(false);
+            setLoading(false)
         }
-    };
+    }
 
-    const handleCreateTransfer = async (recommendation) => {
+    const handleTransferAction = async (transferId, status, comments = '') => {
         try {
-            const transferData = {
-                from_user_id: recommendation.from_user_id,
-                to_user_id: recommendation.to_user_id,
-                machine_id: recommendation.machine_id,
-                target_location_lat: parseFloat(recommendation.target_location.split(', ')[0]),
-                target_location_lon: parseFloat(recommendation.target_location.split(', ')[1]),
-            };
+            const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/recommendations/transfers/${transferId}`, {
+                method: 'PUT',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    status: status,
+                    admin_comments: comments
+                })
+            })
 
-            const response = await recommendationsAPI.createDirectTransfer(transferData, token);
-            if (response.success) {
-                alert('Transfer request created successfully!');
-                fetchTransferRecommendations(); // Refresh recommendations
+            if (response.ok) {
+                fetchTransfers() // Refresh data
             }
         } catch (error) {
-            console.error('Error creating transfer:', error);
-            alert('Failed to create transfer request');
+            console.error('Error updating transfer:', error)
         }
-    };
+    }
 
-    const getPriorityColor = (priority) => {
-        switch (priority) {
-            case 'high': return 'bg-red-100 text-red-800 border-red-200';
-            case 'medium': return 'bg-yellow-100 text-yellow-800 border-yellow-200';
-            case 'low': return 'bg-green-100 text-green-800 border-green-200';
-            default: return 'bg-gray-100 text-gray-800 border-gray-200';
+    const getStatusBadge = (status) => {
+        const statusConfig = {
+            'pending': { color: '#ffc107', bgColor: '#fff3cd', icon: Clock },
+            'approved': { color: '#28a745', bgColor: '#d4edda', icon: CheckCircle },
+            'declined': { color: '#dc3545', bgColor: '#f8d7da', icon: XCircle },
         }
-    };
+        
+        const config = statusConfig[status.toLowerCase()] || statusConfig.pending
+        const Icon = config.icon
+        
+        return (
+            <span style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px',
+                padding: '4px 12px',
+                borderRadius: '20px',
+                fontSize: '12px',
+                fontWeight: '600',
+                color: config.color,
+                backgroundColor: config.bgColor,
+            }}>
+                <Icon size={12} />
+                {status.charAt(0).toUpperCase() + status.slice(1)}
+            </span>
+        )
+    }
 
     if (loading) {
-        return <div className="text-center p-8">Loading transfer recommendations...</div>;
+        return (
+            <div style={{ textAlign: 'center', padding: '40px' }}>
+                <div style={{ 
+                    display: 'inline-block',
+                    width: '32px',
+                    height: '32px',
+                    border: '3px solid #f3f3f3',
+                    borderTop: '3px solid #0070f3',
+                    borderRadius: '50%',
+                    animation: 'spin 1s linear infinite'
+                }}></div>
+                <p style={{ marginTop: '16px', color: '#666' }}>Loading transfer recommendations...</p>
+            </div>
+        )
     }
 
     return (
-        <div className="space-y-6">
-            <Card>
-                <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                        <Truck className="w-5 h-5" />
-                        Transfer Optimization
-                    </CardTitle>
-                    <p className="text-sm text-gray-600">
-                        Direct machine transfers can save time and transportation costs
+        <div style={{ background: 'white', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.1)' }}>
+            {/* Header */}
+            <div style={{ 
+                padding: '20px 24px', 
+                borderBottom: '1px solid #edf2f7',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center'
+            }}>
+                <div>
+                    <h3 style={{ margin: '0 0 4px 0', fontSize: '18px', fontWeight: '600', color: '#1a202c' }}>
+                        Transfer Recommendations
+                    </h3>
+                    <p style={{ margin: 0, fontSize: '14px', color: '#718096' }}>
+                        Optimize machine allocation to reduce costs and improve efficiency
                     </p>
-                </CardHeader>
-                <CardContent>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
-                        <div className="bg-blue-50 p-4 rounded-lg">
-                            <div className="flex items-center gap-2">
-                                <DollarSign className="w-5 h-5 text-blue-600" />
-                                <span className="font-medium">Total Potential Savings</span>
-                            </div>
-                            <p className="text-2xl font-bold text-blue-600">${totalSavings.toFixed(2)}</p>
-                        </div>
+                </div>
+                <select
+                    value={statusFilter}
+                    onChange={(e) => setStatusFilter(e.target.value)}
+                    style={{
+                        padding: '8px 12px',
+                        border: '1px solid #d2d6dc',
+                        borderRadius: '6px',
+                        fontSize: '14px',
+                        color: '#374151',
+                        background: 'white'
+                    }}
+                >
+                    <option value="all">All Status</option>
+                    <option value="pending">Pending</option>
+                    <option value="approved">Approved</option>
+                    <option value="declined">Declined</option>
+                </select>
+            </div>
 
-                        <div className="bg-green-50 p-4 rounded-lg">
-                            <div className="flex items-center gap-2">
-                                <Truck className="w-5 h-5 text-green-600" />
-                                <span className="font-medium">Optimization Opportunities</span>
-                            </div>
-                            <p className="text-2xl font-bold text-green-600">{recommendations.length}</p>
-                        </div>
+            {/* Content */}
+            <div style={{ padding: '24px' }}>
+                {transfers.length === 0 ? (
+                    <div style={{ textAlign: 'center', padding: '40px 20px' }}>
+                        <Truck size={48} style={{ color: '#cbd5e0', margin: '0 auto 16px' }} />
+                        <h4 style={{ margin: '0 0 8px 0', fontSize: '16px', color: '#4a5568' }}>
+                            No transfer recommendations
+                        </h4>
+                        <p style={{ margin: 0, fontSize: '14px', color: '#718096' }}>
+                            Check back later for optimization opportunities
+                        </p>
                     </div>
+                ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                        {transfers.map((transfer) => (
+                            <div
+                                key={transfer.transferID}
+                                style={{
+                                    border: '1px solid #e2e8f0',
+                                    borderRadius: '8px',
+                                    padding: '20px',
+                                    transition: 'all 0.2s',
+                                    cursor: 'default'
+                                }}
+                                onMouseEnter={(e) => {
+                                    e.target.style.boxShadow = '0 4px 12px rgba(0,0,0,0.1)'
+                                    e.target.style.borderColor = '#cbd5e0'
+                                }}
+                                onMouseLeave={(e) => {
+                                    e.target.style.boxShadow = 'none'
+                                    e.target.style.borderColor = '#e2e8f0'
+                                }}
+                            >
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
+                                    <h4 style={{ margin: 0, fontSize: '16px', fontWeight: '600', color: '#1a202c' }}>
+                                        Machine Transfer: {transfer.machineID}
+                                    </h4>
+                                    {getStatusBadge(transfer.status)}
+                                </div>
 
-                    <div className="space-y-4">
-                        {recommendations.length === 0 ? (
-                            <p className="text-gray-500 text-center py-8">
-                                No transfer optimization opportunities found at this time.
-                            </p>
-                        ) : (
-                            recommendations.map((rec, index) => (
-                                <Card key={index} className="border-l-4 border-l-blue-500">
-                                    <CardContent className="pt-4">
-                                        <div className="flex justify-between items-start mb-3">
-                                            <div className="flex items-center gap-2">
-                                                <Badge className={getPriorityColor(rec.priority)}>
-                                                    {rec.priority.toUpperCase()} PRIORITY
-                                                </Badge>
-                                                <Badge variant="outline">
-                                                    ${rec.estimated_savings} savings
-                                                </Badge>
-                                            </div>
-                                        </div>
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px', marginBottom: '16px' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                        <User size={16} style={{ color: '#718096' }} />
+                                        <span style={{ fontSize: '14px', color: '#4a5568' }}>
+                                            From: <strong>{transfer.user1_name}</strong>
+                                        </span>
+                                    </div>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                        <User size={16} style={{ color: '#718096' }} />
+                                        <span style={{ fontSize: '14px', color: '#4a5568' }}>
+                                            To: <strong>{transfer.user2_name}</strong>
+                                        </span>
+                                    </div>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                        <Truck size={16} style={{ color: '#718096' }} />
+                                        <span style={{ fontSize: '14px', color: '#4a5568' }}>
+                                            Type: <strong>{transfer.machine_type}</strong>
+                                        </span>
+                                    </div>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                        <Calendar size={16} style={{ color: '#718096' }} />
+                                        <span style={{ fontSize: '14px', color: '#4a5568' }}>
+                                            Created: {new Date(transfer.createdAt).toLocaleDateString()}
+                                        </span>
+                                    </div>
+                                </div>
 
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                                            <div>
-                                                <h4 className="font-medium flex items-center gap-1">
-                                                    <Users className="w-4 h-4" />
-                                                    Transfer Details
-                                                </h4>
-                                                <p className="text-sm text-gray-600">
-                                                    From: <span className="font-medium">{rec.from_user_name}</span>
-                                                </p>
-                                                <p className="text-sm text-gray-600">
-                                                    To: <span className="font-medium">{rec.to_user_name}</span>
-                                                </p>
-                                                <p className="text-sm text-gray-600">
-                                                    Machine: <span className="font-medium">{rec.machine_type} ({rec.machine_id})</span>
-                                                </p>
-                                            </div>
-
-                                            <div>
-                                                <h4 className="font-medium flex items-center gap-1">
-                                                    <MapPin className="w-4 h-4" />
-                                                    Distance Saved
-                                                </h4>
-                                                <p className="text-sm text-gray-600">
-                                                    {rec.distance_saved.toFixed(1)} km saved
-                                                </p>
-                                                <p className="text-sm text-gray-600">
-                                                    Current: {rec.current_location}
-                                                </p>
-                                                <p className="text-sm text-gray-600">
-                                                    Target: {rec.target_location}
-                                                </p>
-                                            </div>
-                                        </div>
-
-                                        <p className="text-sm text-gray-700 mb-4">{rec.reason}</p>
-
-                                        <div className="flex gap-2">
-                                            <Button
-                                                onClick={() => handleCreateTransfer(rec)}
-                                                className="bg-blue-600 hover:bg-blue-700"
-                                                size="sm"
-                                            >
-                                                Create Transfer Request
-                                            </Button>
-                                        </div>
-                                    </CardContent>
-                                </Card>
-                            ))
-                        )}
+                                {transfer.status === 'pending' && (
+                                    <div style={{ display: 'flex', gap: '12px', marginTop: '16px' }}>
+                                        <button
+                                            onClick={() => handleTransferAction(transfer.transferID, 'approved')}
+                                            style={{
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: '6px',
+                                                padding: '8px 16px',
+                                                background: '#28a745',
+                                                color: 'white',
+                                                border: 'none',
+                                                borderRadius: '6px',
+                                                cursor: 'pointer',
+                                                fontSize: '14px',
+                                                fontWeight: '500',
+                                                transition: 'background 0.2s'
+                                            }}
+                                            onMouseEnter={(e) => e.target.style.background = '#218838'}
+                                            onMouseLeave={(e) => e.target.style.background = '#28a745'}
+                                        >
+                                            <CheckCircle size={14} />
+                                            Approve
+                                        </button>
+                                        <button
+                                            onClick={() => handleTransferAction(transfer.transferID, 'declined')}
+                                            style={{
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: '6px',
+                                                padding: '8px 16px',
+                                                background: 'white',
+                                                color: '#dc3545',
+                                                border: '1px solid #dc3545',
+                                                borderRadius: '6px',
+                                                cursor: 'pointer',
+                                                fontSize: '14px',
+                                                fontWeight: '500',
+                                                transition: 'all 0.2s'
+                                            }}
+                                            onMouseEnter={(e) => {
+                                                e.target.style.background = '#dc3545'
+                                                e.target.style.color = 'white'
+                                            }}
+                                            onMouseLeave={(e) => {
+                                                e.target.style.background = 'white'
+                                                e.target.style.color = '#dc3545'
+                                            }}
+                                        >
+                                            <XCircle size={14} />
+                                            Decline
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+                        ))}
                     </div>
-                </CardContent>
-            </Card>
+                )}
+            </div>
         </div>
-    );
-};
-
-export default TransferOptimization;
+    )
+}

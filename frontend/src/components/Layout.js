@@ -172,7 +172,7 @@ const Layout = ({ children }) => {
                         </button>
 
                         {/* Notifications */}
-                        <button 
+                        {/* <button 
                             className="notification-btn"
                             onClick={() => {
                                 const notificationSection = document.getElementById('notifications-section');
@@ -184,7 +184,7 @@ const Layout = ({ children }) => {
                         >
                             <Bell size={18} />
                             <span className="notification-badge">3</span>
-                        </button>
+                        </button> */}
 
                         {/* User Menu */}
                         <div className="user-menu">
