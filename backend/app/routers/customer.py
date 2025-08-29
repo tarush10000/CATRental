@@ -158,13 +158,26 @@ async def create_request(
             raise HTTPException(status_code=404, detail="Machine not found")
         
         # Create the request document
+        # Convert "date" field to datetime object if present and not already a datetime
+        request_date = None
+        if "date" in request_data and request_data["date"]:
+            if isinstance(request_data["date"], datetime):
+                request_date = request_data["date"]
+            else:
+                try:
+                    request_date = datetime.fromisoformat(request_data["date"])
+                except Exception:
+                    raise HTTPException(status_code=400, detail="Invalid date format. Use ISO format (YYYY-MM-DD or YYYY-MM-DDTHH:MM:SS)")
+        
         new_request = {
+            "requestID": f"REQ-{int(datetime.utcnow().timestamp())}-{current_user['userID']}",
             "userID": current_user["userID"],
             "machineID": request_data["machineID"],
             "requestType": request_data["requestType"],
+            "date": request_date,
             "description": request_data["description"],
             "priority": request_data.get("priority", "medium"),
-            "status": "In-Progress",
+            "status": "Pending",
             "requestDate": datetime.utcnow(),
             "updatedAt": datetime.utcnow(),
             "adminNotes": ""
@@ -555,6 +568,119 @@ async def get_customer_analytics(current_user: dict = Depends(get_current_user))
             success=True,
             message="Analytics retrieved successfully",
             data=analytics
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+    
+# Add this to backend/app/routers/customer.py
+
+@router.post("/orders", response_model=APIResponse)
+async def create_order(
+    order_data: dict,
+    current_user: dict = Depends(get_current_user)
+):
+    try:
+        if current_user["role"] != "customer":
+            raise HTTPException(status_code=403, detail="Customer access required")
+        
+        # Validate required fields
+        required_fields = ["machineType", "location", "siteID", "checkInDate", "checkOutDate"]
+        for field in required_fields:
+            if field not in order_data:
+                raise HTTPException(status_code=400, detail=f"Missing required field: {field}")
+        
+        # Validate dates
+        try:
+            check_in_date = datetime.fromisoformat(order_data["checkInDate"].replace('Z', '+00:00'))
+            check_out_date = datetime.fromisoformat(order_data["checkOutDate"].replace('Z', '+00:00'))
+        except (ValueError, AttributeError) as e:
+            raise HTTPException(status_code=400, detail="Invalid date format. Use ISO format.")
+        
+        if check_out_date <= check_in_date:
+            raise HTTPException(status_code=400, detail="Check-out date must be after check-in date")
+        
+        # if check_in_date <= datetime.utcnow():
+        #     raise HTTPException(status_code=400, detail="Check-in date must be in the future")
+        
+        # Generate order ID
+        import uuid
+        order_id = str(uuid.uuid4())
+        
+        # Create the order document
+        new_order = {
+            "orderID": order_id,
+            "userID": current_user["userID"],
+            "machineType": order_data["machineType"],
+            "location": order_data["location"],
+            "siteID": order_data["siteID"],
+            "checkInDate": check_in_date,
+            "checkOutDate": check_out_date,
+            "status": "Pending",
+            "comments": order_data.get("comments", ""),
+            "createdAt": datetime.utcnow(),
+            "updatedAt": datetime.utcnow()
+        }
+        
+        result = await db.neworders.insert_one(new_order)
+        
+        return APIResponse(
+            success=True,
+            message="Order created successfully",
+            data={
+                "order_id": order_id,
+                "status": "Pending",
+                "message": "Your order has been submitted and is pending approval from the administrator."
+            }
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+@router.get("/machine-types", response_model=APIResponse)
+async def get_available_machine_types(
+    current_user: dict = Depends(get_current_user)
+):
+    """Get available machine types for orders"""
+    try:
+        if current_user["role"] != "customer":
+            raise HTTPException(status_code=403, detail="Customer access required")
+        
+        # Get unique machine types from machines collection
+        machine_types = await db.machines.distinct("machineType")
+        
+        # Common machine types that are available
+        common_machine_types = [
+            "Excavators",
+            "Bulldozers", 
+            "Wheel Loaders",
+            "Motor Graders",
+            "Articulated Trucks",
+            "Backhoe Loaders",
+            "Skid Steer Loaders",
+            "Track Loaders",
+            "Compactors",
+            "Road Reclaimers",
+            "Rock Trucks",
+            "Forestry Equipment",
+            "Mining Equipment",
+            "Agricultural Equipment"
+        ]
+        
+        # Combine and deduplicate
+        all_types = list(set(machine_types + common_machine_types))
+        all_types.sort()
+        
+        return APIResponse(
+            success=True,
+            message="Machine types retrieved successfully",
+            data={
+                "machine_types": all_types
+            }
         )
         
     except HTTPException:

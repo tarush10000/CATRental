@@ -65,6 +65,7 @@ const Layout = ({ children }) => {
         { name: 'Create Request', href: '/customer/create-request', icon: FileText },
         { name: 'My Machines', href: '/customer/machines', icon: Truck },
         { name: 'Smart Recommendations', href: '/customer/recommendations', icon: Lightbulb },
+        { name: 'Orders', href: '/customer/order', icon: FileText },
     ];
 
     const navItems = isAdmin ? adminNavItems : customerNavItems;

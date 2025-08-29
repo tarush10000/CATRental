@@ -68,8 +68,8 @@ export default function CustomerOtherPages() {
         switch(page) {
             case 'machines':
                 return <CustomerMachines />
-            case 'create-request':
-                return <CreateRequest />
+            // case 'create-request':
+            //     return <CreateRequest />
             case 'recommendations':
                 return <Recommendations />
             default:
