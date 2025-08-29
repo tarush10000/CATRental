@@ -11,31 +11,56 @@ import {
     ArrowLeft, Clock, Building2, Target
 } from 'lucide-react'
 import { get } from 'http'
-import VoiceInput from '@/components/VoiceInput'
+import VoiceInputAdvanced from '@/components/VoiceInputAdvanced'
 
 const processVoiceInput = async (transcript) => {
-  try {
-    const response = await fetch('/api/gemini', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        transcript,
-        formFields: ['machineType', 'description', 'priority', 'location']
-      })
-    })
-    
-    const result = await response.json()
-    if (result.success) {
-      setFormData(prev => ({
-        ...prev,
-        ...Object.fromEntries(
-          Object.entries(result.data).filter(([key, value]) => value !== '')
-        )
-      }))
+    try {
+        const response = await fetch('/api/gemini', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                transcript,
+                formFields: ['machineType', 'description', 'priority', 'location']
+            })
+        })
+
+        const result = await response.json()
+        if (result.success) {
+            setFormData(prev => ({
+                ...prev,
+                ...Object.fromEntries(
+                    Object.entries(result.data).filter(([key, value]) => value !== '')
+                )
+            }))
+        }
+    } catch (error) {
+        console.error('Error processing voice input:', error)
     }
-  } catch (error) {
-    console.error('Error processing voice input:', error)
-  }
+}
+
+const handleVoiceFormUpdate = (voiceData) => {
+    console.log('🎤 handleVoiceFormUpdate called with:', voiceData)
+    console.log('📝 Current form data before update:', formData)
+
+    const updatedData = { ...formData }
+
+    // Update each field if it exists in voiceData
+    Object.keys(voiceData).forEach(key => {
+        if (voiceData[key] && voiceData[key] !== '') {
+            updatedData[key] = voiceData[key]
+            console.log(`✅ Updated ${key}:`, voiceData[key])
+        }
+    })
+
+    console.log('📝 Final form data after update:', updatedData)
+
+    // Update the form
+    setFormData(updatedData)
+
+    // Clear related errors
+    setErrors({})
+
+    console.log('✅ Form state updated successfully!')
 }
 
 async function getCoordinates(cityName) {
@@ -373,6 +398,14 @@ export default function CreateOrderPage() {
                                             <span>{errors.submit}</span>
                                         </div>
                                     )}
+
+                                    {/* <VoiceInputAdvanced
+                                        formFields={['machineType', 'siteID', 'location', 'checkInDate', 'checkOutDate', 'quantity', 'comments']}
+                                        currentFormData={formData}
+                                        onFormUpdate={handleVoiceFormUpdate}
+                                        placeholder="Describe your equipment order requirements..."
+                                        className="mb-6"
+                                    /> */}
 
                                     <div className="form-grid">
                                         {/* Machine Type */}

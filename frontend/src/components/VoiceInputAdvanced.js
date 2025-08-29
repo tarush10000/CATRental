@@ -3,95 +3,105 @@
 import { Mic, Square, Loader2, Send } from 'lucide-react'
 import { useVoiceInputAdvanced } from '@/hooks/useVoiceInputAdvanced'
 
-export default function VoiceInputAdvanced({
-    formFields,
-    currentFormData,
-    onFormUpdate,
-    className = '',
-    placeholder = "Speak your requirements in any language..."
+export default function VoiceInputAdvanced({ 
+  formFields, 
+  currentFormData, 
+  onFormUpdate, 
+  className = '',
+  placeholder = "Speak your requirements in any language..."
 }) {
-    const {
-        isRecording,
-        transcript,
-        isProcessing,
-        startRecording,
-        stopRecording,
-        processWithAI
-    } = useVoiceInputAdvanced()
+  const {
+    isRecording,
+    transcript,
+    isProcessing,
+    startRecording,
+    stopRecording,
+    processWithAI
+  } = useVoiceInputAdvanced()
 
-    const handleProcess = () => {
-        if (transcript && onFormUpdate) {
-            processWithAI(formFields, currentFormData, onFormUpdate)
-        }
+  const handleProcess = () => {
+    console.log('handleProcess called')
+    console.log('Current state:', { transcript, formFields, currentFormData, onFormUpdate })
+    
+    if (transcript && onFormUpdate) {
+      console.log('Starting AI processing...')
+      processWithAI(formFields, currentFormData, onFormUpdate)
+    } else {
+      console.log('Missing requirements:', { 
+        hasTranscript: !!transcript, 
+        hasCallback: !!onFormUpdate 
+      })
     }
+  }
 
-    return (
-        <div className={`voice-input-container ${className}`}>
-            <div className="voice-input-card">
-                <div className="voice-header">
-                    <div className="voice-title">
-                        <Mic className="h-5 w-5 text-blue-500" />
-                        Voice Input Assistant
-                    </div>
-                    <div className="voice-subtitle">
-                        {placeholder}
-                    </div>
-                </div>
+  return (
+    <div className={`voice-input-container ${className}`}>
+      <div className="voice-input-card">
+        <div className="voice-header">
+          <div className="voice-title">
+            <Mic className="h-5 w-5 text-blue-500" />
+            Voice Input Assistant
+          </div>
+          <div className="voice-subtitle">
+            {placeholder}
+          </div>
+        </div>
 
-                <div className="voice-controls">
-                    <button
-                        type="button"
-                        onClick={isRecording ? stopRecording : startRecording}
-                        disabled={isProcessing}
-                        className={`voice-btn ${isRecording
-                                ? 'voice-btn-recording'
-                                : 'voice-btn-ready'
-                            } ${isProcessing ? 'voice-btn-disabled' : ''}`}
-                    >
-                        {isProcessing ? (
-                            <Loader2 className="h-5 w-5 animate-spin" />
-                        ) : isRecording ? (
-                            <>
-                                <Square className="h-5 w-5" />
-                                Stop Recording
-                            </>
-                        ) : (
-                            <>
-                                <Mic className="h-5 w-5" />
-                                Start Voice Input
-                            </>
-                        )}
-                    </button>
-                </div>
-
-                {transcript && (
-                    <div className="voice-transcript">
-                        <div className="transcript-content">
-                            <p>"{transcript}"</p>
-                        </div>
-                        <button
-                            type="button"
-                            onClick={handleProcess}
-                            disabled={isProcessing}
-                            className="transcript-process-btn"
-                        >
-                            {isProcessing ? (
-                                <>
-                                    <Loader2 className="h-4 w-4 animate-spin" />
-                                    Processing with AI...
-                                </>
-                            ) : (
-                                <>
-                                    <Send className="h-4 w-4" />
-                                    Fill Form with AI
-                                </>
-                            )}
-                        </button>
-                    </div>
-                )}
+        <div className="voice-controls">
+          <button
+            type="button"
+            onClick={isRecording ? stopRecording : startRecording}
+            disabled={isProcessing}
+            className={`voice-btn ${
+              isRecording 
+                ? 'voice-btn-recording' 
+                : 'voice-btn-ready'
+            } ${isProcessing ? 'voice-btn-disabled' : ''}`}
+          >
+            {isProcessing ? (
+              <Loader2 className="h-5 w-5 animate-spin" />
+            ) : isRecording ? (
+              <>
+                <Square className="h-5 w-5" />
+                Stop Recording
+              </>
+            ) : (
+              <>
+                <Mic className="h-5 w-5" />
+                Start Voice Input
+              </>
+            )}
+          </button>
+        </div>
+        
+        {transcript && (
+          <div className="voice-transcript">
+            <div className="transcript-content">
+              <p>"{transcript}"</p>
             </div>
+            <button
+              type="button"
+              onClick={handleProcess}
+              disabled={isProcessing}
+              className="transcript-process-btn"
+            >
+              {isProcessing ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Processing with AI...
+                </>
+              ) : (
+                <>
+                  <Send className="h-4 w-4" />
+                  Fill Form with AI
+                </>
+              )}
+            </button>
+          </div>
+        )}
+      </div>
 
-            <style jsx>{`
+      <style jsx>{`
         .voice-input-container {
           margin-bottom: 2rem;
         }
@@ -217,6 +227,6 @@ export default function VoiceInputAdvanced({
           }
         }
       `}</style>
-        </div>
-    )
+    </div>
+  )
 }

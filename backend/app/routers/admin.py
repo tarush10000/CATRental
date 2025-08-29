@@ -1,5 +1,6 @@
 from fastapi import APIRouter, HTTPException, Depends, Query
 import motor.motor_asyncio
+import math
 from decouple import config
 from datetime import datetime, timedelta
 from typing import Optional, List
@@ -8,10 +9,70 @@ from .auth import get_current_user
 
 router = APIRouter()
 
+MACHINE_TYPES = {
+    'Excavator': {'hourlyRate': 150, 'dailyRate': 1200, 'category': 'Heavy Construction'},
+    'Bulldozer': {'hourlyRate': 180, 'dailyRate': 1440, 'category': 'Heavy Construction'},
+    'Loader': {'hourlyRate': 120, 'dailyRate': 960, 'category': 'Material Handling'},
+    'Grader': {'hourlyRate': 140, 'dailyRate': 1120, 'category': 'Road Construction'},
+    'Compactor': {'hourlyRate': 100, 'dailyRate': 800, 'category': 'Compaction'},
+    'Crane': {'hourlyRate': 220, 'dailyRate': 1760, 'category': 'Heavy Lifting'},
+    'Dump Truck': {'hourlyRate': 80, 'dailyRate': 640, 'category': 'Transportation'},
+    'Backhoe': {'hourlyRate': 130, 'dailyRate': 1040, 'category': 'General Construction'}
+}
+
 # MongoDB connection
 MONGODB_URL = config("MONGODB_URL")
 client = motor.motor_asyncio.AsyncIOMotorClient(MONGODB_URL)
 db = client.caterpillar_db
+
+def calculate_machine_revenue(machine_type: str, duration_hours: float, billing_type: str = 'hourly') -> float:
+    """Calculate revenue for a single machine based on type and duration"""
+    machine = MACHINE_TYPES.get(machine_type)
+    
+    if not machine:
+        return duration_hours * 100  # Default fallback rate
+    
+    if billing_type == 'daily':
+        days = math.ceil(duration_hours / 24)
+        return days * machine['dailyRate']
+    else:
+        return duration_hours * machine['hourlyRate']
+
+def calculate_occupied_duration(start_time: datetime, end_time: datetime = None) -> float:
+    """Calculate duration in hours for occupied machines"""
+    if end_time is None:
+        end_time = datetime.utcnow()
+    
+    duration = end_time - start_time
+    return duration.total_seconds() / 3600
+
+async def get_revenue_from_occupied_machines(dealer_id: str) -> float:
+    """Calculate total revenue from currently occupied machines"""
+    try:
+        occupied_machines = await db.machines.find({
+            "dealerID": dealer_id,
+            "status": "Occupied"
+        }).to_list(length=None)
+        
+        total_revenue = 0.0
+        
+        for machine in occupied_machines:
+            machine_type = machine.get('machineType', 'Unknown')
+            
+            # Try to get when machine became occupied, fallback to updatedAt
+            start_time = machine.get('occupiedSince') or machine.get('updatedAt')
+            
+            if start_time:
+                duration_hours = calculate_occupied_duration(start_time)
+                billing_type = machine.get('billingType', 'hourly')
+                machine_revenue = calculate_machine_revenue(machine_type, duration_hours, billing_type)
+                total_revenue += machine_revenue
+        
+        return round(total_revenue, 2)
+        
+    except Exception as e:
+        print(f"Error calculating revenue: {str(e)}")
+        return 0.0
 
 @router.get("/dashboard", response_model=APIResponse)
 async def get_dashboard(current_user: dict = Depends(get_current_user)):
@@ -33,46 +94,53 @@ async def get_dashboard(current_user: dict = Depends(get_current_user)):
             "status": {"$in": ["Occupied", "In-transit"]}
         })
         
-        # Revenue calculation for last 30 days
-        thirty_days_ago = datetime.utcnow() - timedelta(days=30)
+        # ===== NEW REVENUE CALCULATION =====
+        # Calculate revenue from occupied machines based on machine types and duration
+        occupied_revenue = await get_revenue_from_occupied_machines(dealer_id)
         
-        # Get completed orders from last 30 days
-        # Assuming you have rental pricing in orders collection
-        revenue_pipeline = [
-            {
-                "$lookup": {
-                    "from": "machines",
-                    "localField": "machineID",
-                    "foreignField": "machineID",
-                    "as": "machine_data"
-                }
-            },
-            {
-                "$match": {
-                    "machine_data.dealerID": dealer_id,
-                    "status": "Completed",
-                    "updatedAt": {"$gte": thirty_days_ago}
-                }
-            },
-            {
-                "$group": {
-                    "_id": None,
-                    "total_revenue": {"$sum": "$estimatedCost"}  # Adjust field name based on your schema
-                }
-            }
-        ]
+        # Optional: Also calculate completed orders revenue for the month
+        thirty_days_ago = datetime.utcnow() - timedelta(days=30)
+        completed_revenue = 0.0
         
         try:
+            revenue_pipeline = [
+                {
+                    "$lookup": {
+                        "from": "machines",
+                        "localField": "machineID",
+                        "foreignField": "machineID",
+                        "as": "machine_data"
+                    }
+                },
+                {
+                    "$match": {
+                        "machine_data.dealerID": dealer_id,
+                        "status": "Completed",
+                        "updatedAt": {"$gte": thirty_days_ago}
+                    }
+                },
+                {
+                    "$group": {
+                        "_id": None,
+                        "total_revenue": {"$sum": "$estimatedCost"}
+                    }
+                }
+            ]
+            
             revenue_result = await db.neworders.aggregate(revenue_pipeline).to_list(length=1)
-            total_revenue = revenue_result[0]["total_revenue"] if revenue_result else 0.0
+            completed_revenue = revenue_result[0]["total_revenue"] if revenue_result else 0.0
         except:
-            # Fallback calculation if orders collection doesn't exist yet
-            total_revenue = active_orders * 1500.0  # $1500 average per active machine
+            # If orders collection doesn't work, skip completed revenue
+            completed_revenue = 0.0
+        
+        # Total revenue combines both streams
+        total_revenue = (occupied_revenue + completed_revenue) * 100
+        # ===== END NEW REVENUE CALCULATION =====
 
-        # Get recent notifications/alerts
+        # Get recent notifications/alerts (unchanged)
         notifications = []
         
-        # Check for machines needing maintenance (example logic)
+        # Check for machines needing maintenance
         maintenance_machines = await db.machines.find({
             "dealerID": dealer_id,
             "status": "Maintenance"
@@ -114,8 +182,8 @@ async def get_dashboard(current_user: dict = Depends(get_current_user)):
         dashboard_data = {
             "total_machines": total_machines,
             "active_orders": active_orders,
-            "revenue": round(total_revenue, 2),
-            "notifications": notifications[:10]  # Limit to 10 most recent
+            "revenue": total_revenue,  # This will now show real calculated revenue!
+            "notifications": notifications[:10]
         }
         
         return APIResponse(

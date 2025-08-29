@@ -335,15 +335,15 @@ export default function CustomerDashboard() {
                                                 <div className="usage-stats">
                                                     <div className="stats-row">
                                                         <div className="stat-item">
-                                                            <div className="stat-number">{(machine.engineHoursPerDay * machine.operatingDays) || 0}</div>
+                                                            <div className="stat-number">{Math.round(machine.engineHoursPerDay * machine.operatingDays * 100) / 100 || 0}</div>
                                                             <div className="stat-label">Total Hours</div>
                                                         </div>
                                                         <div className="stat-item">
-                                                            <div className="stat-number">{machine.operatingDays || 0}</div>
+                                                            <div className="stat-number">{Math.round(machine.operatingDays * 100) / 100 || 0}</div>
                                                             <div className="stat-label">Operating Days</div>
                                                         </div>
                                                         <div className="stat-item">
-                                                            <div className="stat-number">{machine.idleHours || 0}h</div>
+                                                            <div className="stat-number">{Math.round(machine.idleHours * 100) / 100 || 0}h</div>
                                                             <div className="stat-label">Idle Time</div>
                                                         </div>
                                                     </div>
